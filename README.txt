@@ -1,5 +1,5 @@
 
-DataLab Flask – Application web d'analyse de données (Python + Flask)
+DataBen – Application web d'analyse de données (Python + Flask)
 
 Fonctionnalités principales
 - Upload CSV/Excel + jeux d'essai (Iris, Ventes)
