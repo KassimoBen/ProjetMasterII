@@ -1,0 +1,540 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-3">
+    <div class="card sticky-top-2">
+      <div class="card-header bg-primary text-white">
+        <i class="bi bi-person-circle me-2"></i>Utilisateur
+      </div>
+      <div class="card-body">
+        <form method="post">
+          <input type="hidden" name="action" value="set_user">
+          <label class="form-label" data-bs-toggle="tooltip" title="Entrez votre nom pour personnaliser l'expérience">Votre nom (optionnel)</label>
+          <input class="form-control mb-2" type="text" name="user_name" value="{{ user or '' }}" placeholder="ex: Liva">
+          <button class="btn btn-outline-secondary w-100" data-bs-toggle="tooltip" title="Sauvegarder votre nom">
+            <i class="bi bi-check-circle me-1"></i>Enregistrer
+          </button>
+        </form>
+        <hr>
+        <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="action" value="upload">
+          <label class="form-label" data-bs-toggle="tooltip" title="Sélectionnez un fichier CSV ou Excel à analyser">Charger CSV/Excel</label>
+          <input class="form-control" type="file" name="file" accept=".csv,.xlsx,.xls">
+          <div class="row mt-2">
+            <div class="col">
+              <input class="form-control" name="sep" value="," placeholder="Séparateur CSV" data-bs-toggle="tooltip" title="Caractère séparateur (ex: , ; |)">
+            </div>
+            <div class="col">
+              <input class="form-control" name="encoding" value="utf-8" placeholder="Encodage" data-bs-toggle="tooltip" title="Encodage du fichier (ex: utf-8, latin1)">
+            </div>
+          </div>
+          <div class="mt-2">
+            <label class="form-label" data-bs-toggle="tooltip" title="Choisissez un jeu de données d'exemple">Ou jeu d'essai</label>
+            <select class="form-select" name="sample">
+              <option>(aucun)</option>
+              <option>Iris</option>
+              <option>Ventes</option>
+            </select>
+          </div>
+          <button class="btn btn-primary w-100 mt-2" data-bs-toggle="tooltip" title="Charger les données sélectionnées">
+            <i class="bi bi-upload me-1"></i>Charger
+          </button>
+        </form>
+        <hr>
+        <div class="d-grid gap-2">
+          <form method="post">
+            <input type="hidden" name="action" value="undo">
+            <button class="btn btn-outline-secondary" data-bs-toggle="tooltip" title="Annuler la dernière action">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Annuler
+            </button>
+          </form>
+          <form method="post">
+            <input type="hidden" name="action" value="redo">
+            <button class="btn btn-outline-secondary" data-bs-toggle="tooltip" title="Rétablir la dernière action annulée">
+              <i class="bi bi-arrow-clockwise me-1"></i>Rétablir
+            </button>
+          </form>
+          <form method="post">
+            <input type="hidden" name="action" value="reset">
+            <button class="btn btn-outline-danger" data-bs-toggle="tooltip" title="Réinitialiser toutes les données et l'historique">
+              <i class="bi bi-arrow-repeat me-1"></i>Réinitialiser
+            </button>
+          </form>
+          <a class="btn btn-success" href="{{ url_for('download_project') }}" data-bs-toggle="tooltip" title="Télécharger le projet complet (données + historique)">
+            <i class="bi bi-download me-1"></i>Télécharger projet
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-9">
+    {% if df is none or df.empty %}
+      <div class="alert alert-info">Chargez un fichier ou un jeu d'essai pour commencer.</div>
+    {% else %}
+    <ul class="nav nav-tabs" id="myTab" role="tablist">
+      <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#apercu" type="button" role="tab">Aperçu</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#nettoyage" type="button" role="tab">Nettoyage</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#transform" type="button" role="tab">Transformation</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#analyse" type="button" role="tab">Analyse</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pivot" type="button" role="tab">Pivot</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#export" type="button" role="tab">Export</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rapport" type="button" role="tab">Rapport</button></li>
+    </ul>
+    <div class="tab-content border-start border-end border-bottom p-3">
+      <div class="tab-pane fade show active" id="apercu" role="tabpanel">
+        <h5><i class="bi bi-eye me-2"></i>Aperçu des données</h5>
+        <div class="row">
+          <div class="col-md-8">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-table me-2"></i>Tableau des données (premières 200 lignes)
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  {{ df|head(200)|safe }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-info-circle me-2"></i>Profil rapide
+              </div>
+              <div class="card-body">
+                <p><strong>Dimensions:</strong> {{ profile.shape[0] }} lignes x {{ profile.shape[1] }} colonnes</p>
+                <h6>Colonnes:</h6>
+                <ul class="small list-unstyled">
+                {% for c, t in profile.dtypes.items() %}
+                  <li class="mb-2">
+                    <i class="bi bi-tag-fill text-primary me-1"></i>
+                    <strong>{{ c }}</strong><br>
+                    <small class="text-muted">Type: {{ t }} | Manquants: {{ profile.missing[c] }}</small>
+                  </li>
+                {% endfor %}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="nettoyage" role="tabpanel">
+        <h5><i class="bi bi-broom me-2"></i>Nettoyage des données</h5>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-trash me-2"></i>Suppression automatique
+              </div>
+              <div class="card-body d-grid gap-2">
+                <form method="post">
+                  <input type="hidden" name="action" value="dropna_rows_all">
+                  <button class="btn btn-outline-primary w-100" data-bs-toggle="tooltip" title="Supprimer toutes les lignes contenant des valeurs manquantes">
+                    <i class="bi bi-dash-circle me-1"></i>Supprimer lignes vides
+                  </button>
+                </form>
+                <form method="post">
+                  <input type="hidden" name="action" value="dropna_cols_all">
+                  <button class="btn btn-outline-primary w-100" data-bs-toggle="tooltip" title="Supprimer toutes les colonnes contenant des valeurs manquantes">
+                    <i class="bi bi-dash-square me-1"></i>Supprimer colonnes vides
+                  </button>
+                </form>
+                <form method="post">
+                  <input type="hidden" name="action" value="drop_duplicates">
+                  <button class="btn btn-outline-primary w-100" data-bs-toggle="tooltip" title="Supprimer les lignes dupliquées">
+                    <i class="bi bi-files me-1"></i>Supprimer doublons
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-pencil-square me-2"></i>Remplir valeurs manquantes
+              </div>
+              <div class="card-body">
+                <form method="post">
+                  <input type="hidden" name="action" value="fillna">
+                  <label class="form-label" data-bs-toggle="tooltip" title="Sélectionnez les colonnes à traiter">Colonnes à remplir</label>
+                  <select class="form-select" name="fill_cols" multiple size="4">
+                    {% for c in cols %}<option>{{ c }}</option>{% endfor %}
+                  </select>
+                  <label class="form-label mt-2" data-bs-toggle="tooltip" title="Choisissez la méthode de remplissage">Stratégie</label>
+                  <select class="form-select" name="strategy">
+                    <option value="fixed">Valeur fixe</option>
+                    <option value="mean">Moyenne</option>
+                    <option value="median">Médiane</option>
+                    <option value="mode">Mode</option>
+                  </select>
+                  <input class="form-control mt-2" name="fill_value" placeholder="Valeur (si fixe)" data-bs-toggle="tooltip" title="Entrez la valeur fixe à utiliser">
+                  <button class="btn btn-success w-100 mt-2" data-bs-toggle="tooltip" title="Appliquer le remplissage aux colonnes sélectionnées">
+                    <i class="bi bi-check-circle me-1"></i>Remplir
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-funnel me-2"></i>Filtrage avancé
+              </div>
+              <div class="card-body">
+                <form method="post">
+                  <input type="hidden" name="action" value="filter">
+                  <label class="form-label" data-bs-toggle="tooltip" title="Utilisez la syntaxe pandas.query (ex: age > 18 and city == 'Paris')">Filtrer (pandas.query)</label>
+                  <input class="form-control" name="query" placeholder="ex: quantite > 5 and produit == 'A'">
+                  <button class="btn btn-warning w-100 mt-2" data-bs-toggle="tooltip" title="Appliquer le filtre aux données">
+                    <i class="bi bi-filter-circle me-1"></i>Appliquer filtre
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="transform" role="tabpanel">
+        <h5><i class="bi bi-gear me-2"></i>Transformation des données</h5>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-check-square me-2"></i>Sélection de colonnes
+              </div>
+              <div class="card-body">
+                <form method="post">
+                  <input type="hidden" name="action" value="select_columns">
+                  <label class="form-label" data-bs-toggle="tooltip" title="Sélectionnez les colonnes à conserver">Garder colonnes</label>
+                  <select class="form-select" name="select_cols" multiple size="6">
+                    {% for c in cols %}<option>{{ c }}</option>{% endfor %}
+                  </select>
+                  <button class="btn btn-outline-secondary w-100 mt-2" data-bs-toggle="tooltip" title="Appliquer la sélection de colonnes">
+                    <i class="bi bi-check-circle me-1"></i>Appliquer
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-tag me-2"></i>Renommer & Convertir
+              </div>
+              <div class="card-body d-grid gap-3">
+                <form method="post">
+                  <input type="hidden" name="action" value="rename_column">
+                  <label class="form-label" data-bs-toggle="tooltip" title="Choisissez la colonne à renommer">Renommer colonne</label>
+                  <select class="form-select" name="old_name">
+                    {% for c in cols %}<option>{{ c }}</option>{% endfor %}
+                  </select>
+                  <input class="form-control mt-2" name="new_name" placeholder="Nouveau nom" data-bs-toggle="tooltip" title="Entrez le nouveau nom de la colonne">
+                  <button class="btn btn-outline-secondary w-100 mt-2" data-bs-toggle="tooltip" title="Renommer la colonne sélectionnée">
+                    <i class="bi bi-pencil me-1"></i>Renommer
+                  </button>
+                </form>
+                <form method="post">
+                  <input type="hidden" name="action" value="astype">
+                  <label class="form-label" data-bs-toggle="tooltip" title="Choisissez la colonne à convertir">Convertir type</label>
+                  <select class="form-select" name="astype_col">
+                    {% for c in cols %}<option>{{ c }}</option>{% endfor %}
+                  </select>
+                  <select class="form-select mt-2" name="astype_type" data-bs-toggle="tooltip" title="Sélectionnez le nouveau type de données">
+                    <option>str</option><option>int</option><option>float</option><option>datetime</option>
+                  </select>
+                  <button class="btn btn-outline-secondary w-100 mt-2" data-bs-toggle="tooltip" title="Convertir le type de la colonne">
+                    <i class="bi bi-arrow-repeat me-1"></i>Convertir
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-calculator me-2"></i>Colonne calculée
+              </div>
+              <div class="card-body">
+                <form method="post">
+                  <input type="hidden" name="action" value="computed_column">
+                  <label class="form-label" data-bs-toggle="tooltip" title="Entrez le nom de la nouvelle colonne">Nom de la colonne</label>
+                  <input class="form-control" name="new_col" placeholder="Nom de la nouvelle colonne">
+                  <label class="form-label mt-2" data-bs-toggle="tooltip" title="Utilisez les noms de colonnes existants (ex: quantite * prix_unitaire)">Expression</label>
+                  <input class="form-control mt-2" name="expr" placeholder="Expression (ex: quantite * prix_unitaire)">
+                  <button class="btn btn-outline-secondary w-100 mt-2" data-bs-toggle="tooltip" title="Créer la nouvelle colonne calculée">
+                    <i class="bi bi-plus-circle me-1"></i>Créer
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="analyse" role="tabpanel">
+        <h5><i class="bi bi-bar-chart-line me-2"></i>Analyse des données</h5>
+        <div class="row g-3">
+          <div class="col-lg-6">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-graph-up me-2"></i>Corrélation
+              </div>
+              <div class="card-body">
+                <div id="corr">
+                  <iframe src="{{ url_for('plot_corr') }}" style="width:100%;height:420px;border:0;"></iframe>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-bar-chart me-2"></i>Tests statistiques
+              </div>
+              <div class="card-body d-grid gap-3">
+                {% if not SCIPY_OK %}
+                  <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Installez <code>scipy</code> pour activer l'ANOVA.
+                  </div>
+                {% else %}
+                  <div>
+                    <h6><i class="bi bi-calculator me-2"></i>ANOVA (1 facteur)</h6>
+                    <div class="row">
+                      <div class="col">
+                        <label class="form-label" data-bs-toggle="tooltip" title="Variable dépendante numérique">Y (numérique)</label>
+                        <select id="anova_y" class="form-select">{% for c in num_cols %}<option>{{ c }}</option>{% endfor %}</select>
+                      </div>
+                      <div class="col">
+                        <label class="form-label" data-bs-toggle="tooltip" title="Variable indépendante catégorielle">Facteur (cat.)</label>
+                        <select id="anova_g" class="form-select">{% for c in cat_cols %}<option>{{ c }}</option>{% endfor %}</select>
+                      </div>
+                    </div>
+                    <button class="btn btn-sm btn-primary mt-2" onclick="runAnova()" data-bs-toggle="tooltip" title="Lancer le test ANOVA">
+                      <i class="bi bi-play-circle me-1"></i>Lancer
+                    </button>
+                    <div id="anova_res" class="mt-2 small text-muted"></div>
+                  </div>
+                {% endif %}
+
+                {% if not SKLEARN_OK %}
+                  <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Installez <code>scikit-learn</code> pour activer la régression.
+                  </div>
+                {% else %}
+                  <div>
+                    <h6><i class="bi bi-trending-up me-2"></i>Régression linéaire</h6>
+                    <div class="row">
+                      <div class="col">
+                        <label class="form-label" data-bs-toggle="tooltip" title="Variable cible à prédire">Cible (Y)</label>
+                        <select id="reg_y" class="form-select">{% for c in num_cols %}<option>{{ c }}</option>{% endfor %}</select>
+                      </div>
+                      <div class="col">
+                        <label class="form-label" data-bs-toggle="tooltip" title="Variables explicatives">Variables X</label>
+                        <select id="reg_x" class="form-select" multiple size="4">{% for c in num_cols %}<option>{{ c }}</option>{% endfor %}</select>
+                      </div>
+                    </div>
+                    <button class="btn btn-sm btn-primary mt-2" onclick="runReg()" data-bs-toggle="tooltip" title="Entraîner le modèle de régression">
+                      <i class="bi bi-gear me-1"></i>Entraîner
+                    </button>
+                    <div id="reg_res" class="mt-2 small"></div>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr>
+        {% if not SKLEARN_OK %}
+          <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle me-2"></i>Installez <code>scikit-learn</code> pour activer la normalisation.
+          </div>
+        {% else %}
+          <div class="card">
+            <div class="card-header">
+              <i class="bi bi-sliders me-2"></i>Normalisation des données
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col">
+                  <label class="form-label" data-bs-toggle="tooltip" title="Sélectionnez les colonnes numériques à normaliser">Colonnes numériques</label>
+                  <select id="norm_cols" class="form-select" multiple size="4">{% for c in num_cols %}<option>{{ c }}</option>{% endfor %}</select>
+                </div>
+                <div class="col">
+                  <label class="form-label" data-bs-toggle="tooltip" title="Choisissez la méthode de normalisation">Méthode</label>
+                  <select id="norm_method" class="form-select">
+                    <option value="minmax">Min-Max (0–1)</option>
+                    <option value="standard">Standard (Z-score)</option>
+                    <option value="robust">Robuste (IQR)</option>
+                  </select>
+                  <button class="btn btn-outline-primary w-100 mt-2" onclick="normalize()" data-bs-toggle="tooltip" title="Appliquer la normalisation aux colonnes sélectionnées">
+                    <i class="bi bi-check-circle me-1"></i>Appliquer
+                  </button>
+                  <div class="small text-muted mt-2" id="norm_msg"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="tab-pane fade" id="pivot" role="tabpanel">
+        <h5><i class="bi bi-table me-2"></i>Table pivot</h5>
+        <div class="card">
+          <div class="card-header">
+            <i class="bi bi-gear me-2"></i>Configuration du pivot
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label" data-bs-toggle="tooltip" title="Colonnes à agréger (valeurs numériques)">Valeurs</label>
+                <select id="p_values" class="form-select" multiple size="4">{% for c in num_cols %}<option>{{ c }}</option>{% endfor %}</select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" data-bs-toggle="tooltip" title="Colonnes pour les lignes (index)">Index</label>
+                <select id="p_index" class="form-select" multiple size="4">{% for c in cols %}<option>{{ c }}</option>{% endfor %}</select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" data-bs-toggle="tooltip" title="Colonnes pour les en-têtes">Colonnes</label>
+                <select id="p_cols" class="form-select" multiple size="4">{% for c in cols %}<option>{{ c }}</option>{% endfor %}</select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" data-bs-toggle="tooltip" title="Fonction d'agrégation à appliquer">Agrégation</label>
+                <select id="p_agg" class="form-select">
+                  <option>sum</option><option>mean</option><option>count</option><option>min</option><option>max</option>
+                </select>
+                <button class="btn btn-primary w-100 mt-2" onclick="runPivot()" data-bs-toggle="tooltip" title="Générer la table pivot">
+                  <i class="bi bi-play-circle me-1"></i>Générer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="pivot_table" class="mt-3"></div>
+      </div>
+
+      <div class="tab-pane fade" id="export" role="tabpanel">
+        <h5><i class="bi bi-download me-2"></i>Export des données</h5>
+        <div class="card">
+          <div class="card-header">
+            <i class="bi bi-file-earmark-arrow-down me-2"></i>Formats disponibles
+          </div>
+          <div class="card-body">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+              <a class="btn btn-outline-success" href="{{ url_for('download', fmt='csv') }}" data-bs-toggle="tooltip" title="Télécharger les données au format CSV">
+                <i class="bi bi-filetype-csv me-1"></i>Télécharger CSV
+              </a>
+              <a class="btn btn-outline-success" href="{{ url_for('download', fmt='excel') }}" data-bs-toggle="tooltip" title="Télécharger les données au format Excel">
+                <i class="bi bi-file-earmark-excel me-1"></i>Télécharger Excel
+              </a>
+              <a class="btn btn-outline-success" href="{{ url_for('download', fmt='json') }}" data-bs-toggle="tooltip" title="Télécharger les données au format JSON">
+                <i class="bi bi-filetype-json me-1"></i>Télécharger JSON
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="rapport" role="tabpanel">
+        <h5><i class="bi bi-file-earmark-text me-2"></i>Rapport et historique</h5>
+        <div class="card">
+          <div class="card-header">
+            <i class="bi bi-clock-history me-2"></i>Historique des opérations (pipeline)
+          </div>
+          <div class="card-body">
+            {% if not pipeline %}
+              <p class="text-muted">
+                <i class="bi bi-info-circle me-2"></i>Aucune opération enregistrée.
+              </p>
+            {% else %}
+              <div class="timeline">
+                {% for p in pipeline %}
+                  <div class="timeline-item mb-3">
+                    <div class="timeline-marker bg-primary"></div>
+                    <div class="timeline-content">
+                      <small class="text-muted">{{ p.time }}</small>
+                      <h6 class="mb-1">{{ p.action }}</h6>
+                      {% if p.details %}
+                        <small class="text-muted">{{ p.details|tojson(indent=2) }}</small>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="mt-3 text-center">
+          <a class="btn btn-outline-dark" href="{{ url_for('download_project') }}" data-bs-toggle="tooltip" title="Télécharger le projet complet avec données et historique">
+            <i class="bi bi-archive me-1"></i>Télécharger le rapport/projet (.zip)
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function () {
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl);
+  });
+});
+
+function val(sel) {
+  return Array.from(document.querySelectorAll(sel + " option:checked")).map(o=>o.value).join(",");
+}
+
+function runAnova(){
+  const y = document.getElementById("anova_y").value;
+  const g = document.getElementById("anova_g").value;
+  if (!y || !g) {
+    document.getElementById("anova_res").innerHTML = '<div class="alert alert-warning">Veuillez sélectionner Y et le facteur.</div>';
+    return;
+  }
+  fetch(`/analyse/anova?y=${encodeURIComponent(y)}&g=${encodeURIComponent(g)}`)
+    .then(r=>r.text()).then(html=>{ document.getElementById("anova_res").innerHTML = html; });
+}
+
+function runReg(){
+  const y = document.getElementById("reg_y").value;
+  const xs = Array.from(document.getElementById("reg_x").selectedOptions).map(o=>o.value).join(",");
+  if (!y || !xs) {
+    document.getElementById("reg_res").innerHTML = '<div class="alert alert-warning">Veuillez sélectionner Y et au moins une variable X.</div>';
+    return;
+  }
+  fetch(`/analyse/regression?y=${encodeURIComponent(y)}&x=${encodeURIComponent(xs)}`)
+    .then(r=>r.text()).then(html=>{ document.getElementById("reg_res").innerHTML = html; });
+}
+
+function runPivot(){
+  const values = val("#p_values");
+  const index = val("#p_index");
+  const columns = val("#p_cols");
+  const agg = document.getElementById("p_agg").value;
+  if (!values || !index) {
+    document.getElementById("pivot_table").innerHTML = '<div class="alert alert-warning">Veuillez sélectionner au moins Valeurs et Index.</div>';
+    return;
+  }
+  fetch(`/pivot?values=${encodeURIComponent(values)}&index=${encodeURIComponent(index)}&columns=${encodeURIComponent(columns)}&agg=${encodeURIComponent(agg)}`)
+    .then(r=>r.text()).then(html=>{ document.getElementById("pivot_table").innerHTML = html; });
+}
+
+function normalize(){
+  const method = document.getElementById("norm_method").value;
+  const cols = Array.from(document.getElementById("norm_cols").selectedOptions).map(o=>o.value).join(",");
+  if (!cols) {
+    document.getElementById("norm_msg").innerText = 'Veuillez sélectionner au moins une colonne.';
+    return;
+  }
+  fetch(`/normalize?method=${encodeURIComponent(method)}&cols=${encodeURIComponent(cols)}`)
+    .then(r=>r.text()).then(t=>{ document.getElementById("norm_msg").innerText = t.replace(/<[^>]*>/g, ''); location.reload(); });
+}
+</script>
+{% endblock %}

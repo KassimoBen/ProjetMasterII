@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DataLab Flask</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body {
+      padding-bottom: 4rem;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      min-height: 100vh;
+    }
+    pre { white-space: pre-wrap; }
+    .sticky-top-2 { position: sticky; top: 0.5rem; z-index: 100; }
+    .navbar {
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+    }
+    .navbar:hover { box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); }
+    .navbar-brand {
+      font-weight: bold;
+      font-size: 1.5rem;
+      transition: transform 0.3s ease;
+    }
+    .navbar-brand:hover { transform: scale(1.05); }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .alert {
+      border-radius: 10px;
+      border: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .card {
+      border-radius: 15px;
+      border: none;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+      overflow: hidden;
+    }
+    .card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+      transform: translateY(-2px);
+    }
+    .btn {
+      border-radius: 25px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+    .btn-primary { background: linear-gradient(45deg, #667eea, #764ba2); border: none; }
+    .btn-success { background: linear-gradient(45deg, #56ab2f, #a8e6cf); border: none; }
+    .btn-warning { background: linear-gradient(45deg, #f093fb, #f5576c); border: none; }
+    .btn-danger { background: linear-gradient(45deg, #ff6b6b, #ee5a24); border: none; }
+    .btn-outline-secondary { border-color: #667eea; color: #667eea; }
+    .btn-outline-secondary:hover { background: #667eea; border-color: #667eea; }
+    .nav-tabs .nav-link {
+      border-radius: 10px 10px 0 0;
+      border: none;
+      background: rgba(255, 255, 255, 0.8);
+      margin-right: 5px;
+      transition: all 0.3s ease;
+    }
+    .nav-tabs .nav-link.active {
+      background: linear-gradient(45deg, #667eea, #764ba2);
+      color: white;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .tab-content {
+      background: white;
+      border-radius: 0 15px 15px 15px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    .table {
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .timeline {
+      position: relative;
+      padding-left: 30px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, #667eea, #764ba2);
+    }
+    .timeline-item {
+      position: relative;
+      margin-bottom: 20px;
+    }
+    .timeline-marker {
+      position: absolute;
+      left: -22px;
+      top: 5px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 0 0 2px #667eea;
+    }
+    .timeline-content {
+      background: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .form-control, .form-select {
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      transition: all 0.3s ease;
+    }
+    .form-control:focus, .form-select:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+    @media (max-width: 768px) {
+      .container { padding: 0 15px; }
+      .navbar-brand { font-size: 1.2rem; }
+      .btn { font-size: 0.9rem; padding: 0.5rem 1rem; }
+      .card { margin-bottom: 1rem; }
+    }
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg bg-dark navbar-dark mb-3">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{{ url_for('index') }}">
+      <i class="bi bi-bar-chart-line-fill me-2"></i>DataLab Flask
+    </a>
+  </div>
+</nav>
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{cat}} alert-dismissible fade show" role="alert">
+          <i class="bi bi-info-circle-fill me-2"></i>{{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
