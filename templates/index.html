@@ -1,13 +1,16 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="row g-3">
-  <div class="col-lg-3">
-    <div class="card sticky-top-2">
+<style>
+  .card-header i { color: var(--primary-700); margin-right: 8px; }
+</style>
+<div class="app-row g-3">
+  <div class="sidebar">
+  <div class="card sticky-top-2">
       <div class="card-header bg-primary text-white">
         <i class="bi bi-person-circle me-2"></i>Utilisateur
       </div>
       <div class="card-body">
-        <form method="post">
+  <form method="post">
           <input type="hidden" name="action" value="set_user">
           <label class="form-label" data-bs-toggle="tooltip" title="Entrez votre nom pour personnaliser l'expérience">Votre nom (optionnel)</label>
           <input class="form-control mb-2" type="text" name="user_name" value="{{ user or '' }}" placeholder="ex: Liva">
@@ -16,6 +19,13 @@
           </button>
         </form>
         <hr>
+        <div class="small text-muted mb-2">
+          <div>Statistiques rapides</div>
+          <div class="d-flex gap-3 mt-2">
+            <div><strong class="counter" data-target="{{ profile.shape[0] if profile }}">0</strong><br><small>lignes</small></div>
+            <div><strong class="counter" data-target="{{ profile.shape[1] if profile }}">0</strong><br><small>colonnes</small></div>
+          </div>
+        </div>
         <form method="post" enctype="multipart/form-data">
           <input type="hidden" name="action" value="upload">
           <label class="form-label" data-bs-toggle="tooltip" title="Sélectionnez un fichier CSV ou Excel à analyser">Charger CSV/Excel</label>
@@ -68,7 +78,7 @@
     </div>
   </div>
 
-  <div class="col-lg-9">
+  <div>
     {% if df is none or df.empty %}
       <div class="alert alert-info">Chargez un fichier ou un jeu d'essai pour commencer.</div>
     {% else %}
@@ -76,7 +86,9 @@
       <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#apercu" type="button" role="tab">Aperçu</button></li>
       <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#nettoyage" type="button" role="tab">Nettoyage</button></li>
       <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#transform" type="button" role="tab">Transformation</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#calcul" type="button" role="tab">Calculs</button></li>
       <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#analyse" type="button" role="tab">Analyse</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#visualisation" type="button" role="tab">Visualisation</button></li>
       <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pivot" type="button" role="tab">Pivot</button></li>
       <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#export" type="button" role="tab">Export</button></li>
       <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rapport" type="button" role="tab">Rapport</button></li>
@@ -93,6 +105,59 @@
               <div class="card-body p-0">
                 <div class="table-responsive">
                   {{ df|head(200)|safe }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-info-circle me-2"></i>Résumé de colonne
+              </div>
+              <div class="card-body">
+                <label class="form-label">Choisir une colonne</label>
+                <select id="stat_col" class="form-select">
+                  <option value="">(sélectionner)</option>
+                  {% for c in cols %}<option>{{ c }}</option>{% endfor %}
+                </select>
+                <div class="row mt-2">
+                  <div class="col-6">
+                    <select id="stat_plot" class="form-select">
+                      <option value="hist">Histogramme</option>
+                      <option value="box">Boîte</option>
+                      <option value="none">Sans graphique</option>
+                    </select>
+                  </div>
+                  <div class="col-6">
+                    <button class="btn btn-sm btn-primary w-100" onclick="runColStats()">Obtenir</button>
+                  </div>
+                </div>
+                <div id="col_stats" class="mt-3 small"></div>
+                <div id="col_plot" class="mt-2"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6 mt-3">
+            <div class="card">
+              <div class="card-header">
+                <i class="bi bi-robot me-2"></i>Prédiction simple
+              </div>
+              <div class="card-body">
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label class="form-label">Cible (Y)</label>
+                    <select id="pred_y" class="form-select">{% for c in num_cols %}<option>{{ c }}</option>{% endfor %}</select>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label">Features (X) (Ctrl+click)</label>
+                    <select id="pred_x" class="form-select" multiple size="4">{% for c in cols %}<option>{{ c }}</option>{% endfor %}</select>
+                  </div>
+                  <div class="col-12 mt-2">
+                    <label class="form-label">Valeurs pour prédiction (JSON)</label>
+                    <input id="pred_vals" class="form-control" placeholder='ex: {"age":35, "pays":"MG"}'>
+                    <button class="btn btn-primary w-100 mt-2" onclick="runPredict()">Entraîner & Prédire</button>
+                    <div id="pred_res" class="mt-2 small"></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -270,6 +335,71 @@
                 </form>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="visualisation" role="tabpanel">
+        <h5><i class="bi bi-graph-up me-2"></i>Visualisation des données</h5>
+        <div class="card">
+          <div class="card-header">
+            <i class="bi bi-bar-chart me-2"></i>Créer un graphique
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label" data-bs-toggle="tooltip" title="Choisissez le type de graphique">Type de graphique</label>
+                <select id="plot_type" class="form-select">
+                  <option value="scatter">Nuage de points</option>
+                  <option value="line">Ligne</option>
+                  <option value="scatter3d">Nuage 3D</option>
+                  <option value="line3d">Ligne 3D</option>
+                  <option value="bar">Barres</option>
+                  <option value="histogram">Histogramme</option>
+                  <option value="box">Boîte à moustaches</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" data-bs-toggle="tooltip" title="Colonne pour l'axe X">Colonne X</label>
+                <select id="plot_x" class="form-select">{% for c in cols %}<option>{{ c }}</option>{% endfor %}</select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" data-bs-toggle="tooltip" title="Colonne pour l'axe Y (optionnel pour histogramme)">Colonne Y</label>
+                <select id="plot_y" class="form-select">{% for c in cols %}<option>{{ c }}</option>{% endfor %}</select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" data-bs-toggle="tooltip" title="Colonne pour l'axe Z (optionnel pour 3D)">Colonne Z</label>
+                <select id="plot_z" class="form-select">{% for c in cols %}<option>{{ c }}</option>{% endfor %}</select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" data-bs-toggle="tooltip" title="Colonne pour la couleur (optionnel)">Couleur</label>
+                <select id="plot_color" class="form-select">
+                  <option>(aucune)</option>
+                  {% for c in cols %}<option>{{ c }}</option>{% endfor %}
+                </select>
+                <button class="btn btn-primary w-100 mt-2" onclick="runPlot()" data-bs-toggle="tooltip" title="Générer le graphique">
+                  <i class="bi bi-play-circle me-1"></i>Générer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="plot_area" class="mt-3"></div>
+      </div>
+
+      <div class="tab-pane fade" id="calcul" role="tabpanel">
+        <h5><i class="bi bi-calculator me-2"></i>Calculs rapides</h5>
+        <div class="card">
+          <div class="card-header">
+            <i class="bi bi-calculator me-2"></i>Évaluer une expression
+          </div>
+          <div class="card-body">
+            <label class="form-label" data-bs-toggle="tooltip" title="Utilisez les noms de colonnes dans l'expression (ex: quantite.mean() ou quantite * prix_unitaire)">Expression</label>
+            <input class="form-control" id="calc_expr" placeholder="ex: quantite.mean() ou quantite * prix_unitaire">
+            <button class="btn btn-success w-100 mt-2" onclick="runCalc()" data-bs-toggle="tooltip" title="Calculer le résultat de l'expression">
+              <i class="bi bi-play-circle me-1"></i>Calculer
+            </button>
+            <div id="calc_result" class="mt-2"></div>
           </div>
         </div>
       </div>
@@ -526,6 +656,54 @@ function runPivot(){
     .then(r=>r.text()).then(html=>{ document.getElementById("pivot_table").innerHTML = html; });
 }
 
+function runCalc(){
+  const expr = document.getElementById("calc_expr").value;
+  if (!expr) {
+    document.getElementById("calc_result").innerHTML = '<div class="alert alert-warning">Veuillez entrer une expression.</div>';
+    return;
+  }
+  fetch(`/calculate?expr=${encodeURIComponent(expr)}`)
+    .then(r=>r.text()).then(html=>{ document.getElementById("calc_result").innerHTML = html; });
+}
+
+function runPlot(){
+  const type = document.getElementById("plot_type").value;
+  const x = document.getElementById("plot_x").value;
+  const y = document.getElementById("plot_y").value;
+  const color = document.getElementById("plot_color").value;
+  if (!x || (!y && type !== "histogram")) {
+    document.getElementById("plot_area").innerHTML = '<div class="alert alert-warning">Veuillez sélectionner les colonnes requises.</div>';
+    return;
+  }
+  const z = document.getElementById("plot_z").value;
+  const params = new URLSearchParams({type, x, y, z});
+  if (color && color !== "(aucune)") params.append("color", color);
+  // show spinner
+  const area = document.getElementById("plot_area");
+  area.innerHTML = `<div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>`;
+  // fetch the figure JSON and render it with Plotly
+  fetch(`/plot/general?${params}`)
+    .then(r=>{
+      if (!r.ok) return r.text().then(t=>{ throw new Error(t); });
+      return r.json();
+    })
+    .then(obj=>{
+      // create a container
+      area.innerHTML = '';
+      const div = document.createElement('div');
+      div.style.width = '100%';
+      div.style.height = '420px';
+      area.appendChild(div);
+      // use Plotly to render
+      const fig = obj.fig || obj;
+      // fig may contain data and layout
+      Plotly.newPlot(div, fig.data, fig.layout || {});
+    })
+    .catch(err=>{
+      document.getElementById("plot_area").innerHTML = `<div class="alert alert-danger">Erreur: ${err.message}</div>`;
+    });
+}
+
 function normalize(){
   const method = document.getElementById("norm_method").value;
   const cols = Array.from(document.getElementById("norm_cols").selectedOptions).map(o=>o.value).join(",");
@@ -536,5 +714,93 @@ function normalize(){
   fetch(`/normalize?method=${encodeURIComponent(method)}&cols=${encodeURIComponent(cols)}`)
     .then(r=>r.text()).then(t=>{ document.getElementById("norm_msg").innerText = t.replace(/<[^>]*>/g, ''); location.reload(); });
 }
+
+function runColStats(){
+  const col = document.getElementById('stat_col').value;
+  const plot = document.getElementById('stat_plot').value;
+  const out = document.getElementById('col_stats');
+  const area = document.getElementById('col_plot');
+  out.innerHTML = '';
+  area.innerHTML = '';
+  if (!col) { out.innerHTML = '<div class="alert alert-warning">Sélectionnez une colonne.</div>'; return; }
+  out.innerHTML = `<div class="text-center py-3"><div class="spinner-border text-secondary" role="status"></div></div>`;
+  area.innerHTML = '';
+  fetch(`/stats/column?col=${encodeURIComponent(col)}&plot=${encodeURIComponent(plot)}`)
+    .then(r=>{ if(!r.ok) return r.json().then(j=>{ throw new Error(j.error||'Erreur'); }); return r.json(); })
+    .then(j=>{
+      const s = j.stats;
+      let html = `<ul class="list-unstyled small">`;
+      for (const k of Object.keys(s)){
+        html += `<li><strong>${k}:</strong> ${s[k]}</li>`;
+      }
+      html += `</ul>`;
+      out.innerHTML = html;
+      if (j.fig){
+        const div = document.createElement('div');
+        div.style.width='100%'; div.style.height='320px';
+        area.appendChild(div);
+        const fig = j.fig;
+        Plotly.newPlot(div, fig.data, fig.layout || {});
+      }
+    })
+    .catch(err=>{ out.innerHTML = `<div class="alert alert-danger">Erreur: ${err.message}</div>`; });
+}
+
+function runPredict(){
+  const y = document.getElementById('pred_y').value;
+  const xs = Array.from(document.getElementById('pred_x').selectedOptions).map(o=>o.value);
+  const valsRaw = document.getElementById('pred_vals').value;
+  const out = document.getElementById('pred_res');
+  out.innerHTML = '';
+  if (!y || xs.length===0){ out.innerHTML = '<div class="alert alert-warning">Sélectionnez Y et au moins une feature X.</div>'; return; }
+  let values = null;
+  try{ values = valsRaw ? JSON.parse(valsRaw) : null; } catch(e){ out.innerHTML = `<div class="alert alert-danger">JSON invalide: ${e.message}</div>`; return; }
+  const body = { y: y, x: xs, values: values };
+  fetch('/predict', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    .then(r=>r.json())
+    .then(j=>{
+      if (j.error) { out.innerHTML = `<div class="alert alert-danger">${j.error}</div>`; return; }
+      let html = `<ul class="list-unstyled small">`;
+      html += `<li><strong>R²:</strong> ${j.r2?.toFixed(4)}</li>`;
+      html += `<li><strong>Intercept:</strong> ${j.intercept}</li>`;
+      html += `<li><strong>Coefficients:</strong><pre>${JSON.stringify(j.coefficients, null, 2)}</pre></li>`;
+      if (j.prediction !== undefined) html += `<li><strong>Prédiction:</strong> ${j.prediction}</li>`;
+      if (j.prediction_error) html += `<li class="text-danger">Erreur prédiction: ${j.prediction_error}</li>`;
+      html += `</ul>`;
+      out.innerHTML = html;
+    })
+    .catch(e=>{ out.innerHTML = `<div class="alert alert-danger">Erreur: ${e.message}</div>`; });
+}
+
+// IntersectionObserver to animate cards on scroll
+document.addEventListener('DOMContentLoaded', ()=>{
+  const obs = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if (e.isIntersecting) e.target.classList.add('in-view'); });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.card').forEach(c=>{ c.classList.add('fade-in-up'); obs.observe(c); });
+  // animate counters
+  document.querySelectorAll('.counter').forEach(el=>{
+    const target = Number(el.getAttribute('data-target')||0);
+    let cur = 0; const step = Math.max(1, Math.floor(target/60));
+    const t = setInterval(()=>{ cur += step; if (cur >= target){ el.innerText = String(target); clearInterval(t); } else el.innerText = String(cur); }, 16);
+  });
+  // rotate 3D briefly after plot render
+  if (window.Plotly){
+    document.addEventListener('plotly_afterplot', (e)=>{
+      try{
+        const gd = e.target;
+        if (gd && gd.data && gd.data.some(tr=>tr.type && tr.type.includes('3d'))){
+          // animate camera rotate once
+          let angle = 0; const id = setInterval(()=>{
+            angle += 10; const rad = angle * Math.PI/180;
+            const camera = {eye: {x: 1.25*Math.cos(rad), y: 1.25*Math.sin(rad), z: 0.8}};
+            Plotly.relayout(gd, {'scene.camera': camera});
+            if (angle >= 120) clearInterval(id);
+          }, 120);
+        }
+      }catch(e){}
+    }, false);
+  }
+});
 </script>
 {% endblock %}

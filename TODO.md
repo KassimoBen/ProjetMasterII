@@ -1,3 +1,5 @@
-# TODO: Améliorer les styles des pages
-
-## Étapes à suivre
+- [x] Ajouter la route `/plot/general` dans app.py pour générer des graphiques Plotly personnalisés.
+- [x] Ajouter l'onglet "Visualisation" dans templates/index.html avec sélecteurs pour type de graphique et colonnes.
+- [x] Mettre à jour le JavaScript pour récupérer et afficher le graphique dynamique.
+- [x] Ajouter une fonctionnalité de calculs rapides pour évaluer des expressions sans ajouter de colonne.
+- [x] Tester toutes les fonctionnalités ajoutées.

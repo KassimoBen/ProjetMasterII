@@ -4,22 +4,43 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DataBen</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
+    :root{
+      --bg-0: #f6f9fc;
+      --bg-1: #eef2ff;
+      --primary-500: #5566ee;
+      --primary-700: #5b3ea6;
+      --accent: #20c997;
+      --muted: #6c757d;
+    }
     body {
       padding-bottom: 4rem;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      background: linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
       min-height: 100vh;
+      color: #22313f;
+    }
+    /* animated gradient background */
+    .bg-animated {
+      background: linear-gradient(270deg, #f6f9fc, #eef2ff, #f0f8ff);
+      background-size: 600% 600%;
+      animation: GradientShift 18s ease infinite;
+    }
+    @keyframes GradientShift {
+      0%{background-position:0% 50%}
+      50%{background-position:100% 50%}
+      100%{background-position:0% 50%}
     }
     pre { white-space: pre-wrap; }
     .sticky-top-2 { position: sticky; top: 0.5rem; z-index: 100; }
     .navbar {
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      transition: all 0.3s ease;
+      background: linear-gradient(90deg, var(--primary-500) 0%, var(--primary-700) 100%) !important;
+      box-shadow: 0 6px 18px rgba(37, 54, 68, 0.08);
+      transition: all 0.25s ease;
     }
     .navbar:hover { box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); }
     .navbar-brand {
@@ -28,10 +49,12 @@
       transition: transform 0.3s ease;
     }
     .navbar-brand:hover { transform: scale(1.05); }
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
+    .app-container { max-width: 1400px; margin: 0 auto; }
+
+    /* Two-column layout with collapsible sidebar */
+    .app-row { display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: start; }
+    .sidebar { position: sticky; top: 1rem; height: calc(100vh - 4rem); overflow:auto; }
+    @media (max-width: 992px){ .app-row{ grid-template-columns: 1fr; } .sidebar{ position: relative; height: auto; } }
     .alert {
       border-radius: 10px;
       border: none;
@@ -48,6 +71,12 @@
       box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
       transform: translateY(-2px);
     }
+    .card-header {
+      background: linear-gradient(90deg, rgba(86,102,238,0.12), rgba(91,62,166,0.06));
+      border-bottom: none;
+      font-weight: 600;
+    }
+    .sidebar .card-header { background: transparent; color: #22313f; font-size: 0.95rem; }
     .btn {
       border-radius: 25px;
       font-weight: 500;
@@ -78,9 +107,9 @@
     }
     .tab-content {
       background: white;
-      border-radius: 0 15px 15px 15px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(37, 54, 68, 0.06);
+      padding: 18px;
     }
     .table {
       border-radius: 10px;
@@ -122,30 +151,47 @@
     }
     .form-control, .form-select {
       border-radius: 10px;
-      border: 1px solid #ddd;
-      transition: all 0.3s ease;
+      border: 1px solid #e6eef8;
+      transition: all 0.18s ease;
+      background: #fbfdff;
     }
     .form-control:focus, .form-select:focus {
       border-color: #667eea;
       box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
     }
-    @media (max-width: 768px) {
-      .container { padding: 0 15px; }
-      .navbar-brand { font-size: 1.2rem; }
-      .btn { font-size: 0.9rem; padding: 0.5rem 1rem; }
-      .card { margin-bottom: 1rem; }
+    @media (max-width: 992px){
+      .app-row{ grid-template-columns: 1fr; }
+      .navbar-brand { font-size: 1.15rem; }
+      .btn{ padding: 0.5rem 0.9rem; }
+      .card{ margin-bottom: 1rem; }
     }
+    @media (max-width: 576px){
+      .navbar-brand{ font-size: 1rem; }
+      .tab-content{ padding: 12px; }
+    }
+    /* Animations */
+    .fade-in-up { transform: translateY(12px); opacity: 0; transition: transform 400ms cubic-bezier(.2,.8,.2,1), opacity 400ms ease; }
+    .fade-in-up.in-view { transform: translateY(0); opacity: 1; }
+    .pulse { animation: pulse 2.5s ease-in-out infinite; }
+    @keyframes pulse { 0%{ transform: scale(1); } 50%{ transform: scale(1.02); } 100%{ transform: scale(1); } }
+    .btn-animated { transition: transform 160ms ease, box-shadow 160ms ease; }
+    .btn-animated:hover { transform: translateY(-3px) scale(1.01); box-shadow: 0 8px 20px rgba(37,54,68,0.12); }
+    /* subtle tilt on card hover */
+    .card.tilt:hover { transform: translateY(-6px) rotateX(1deg); }
   </style>
 </head>
 <body>
 <nav class="navbar navbar-expand-lg bg-dark navbar-dark mb-3">
   <div class="container-fluid">
-    <a class="navbar-brand" href="{{ url_for('index') }}">
-      <i class="bi bi-bar-chart-line-fill me-2"></i>DataBen
-    </a>
+    <div class="d-flex align-items-center">
+      <button class="btn btn-sm btn-outline-light d-lg-none me-2" id="sidebarToggle"><i class="bi bi-list"></i></button>
+      <a class="navbar-brand" href="{{ url_for('index') }}">
+        <i class="bi bi-bar-chart-line-fill me-2"></i>DataBen
+      </a>
+    </div>
   </div>
 </nav>
-<div class="container">
+<div class="app-container">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for cat, msg in messages %}
@@ -156,8 +202,16 @@
       {% endfor %}
     {% endif %}
   {% endwith %}
-  {% block content %}{% endblock %}
+  <div id="appContent">
+    {% block content %}{% endblock %}
+  </div>
 </div>
+<footer class="text-center small text-muted mt-4 mb-3">DataBen — Outils d'analyse basique • Conçu pour exploration</footer>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.getElementById('sidebarToggle')?.addEventListener('click', ()=>{
+  document.querySelector('.app-row')?.classList.toggle('show-sidebar');
+});
+</script>
 </body>
 </html>

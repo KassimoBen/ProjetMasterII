@@ -8,7 +8,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from flask import Flask, render_template, request, redirect, url_for, send_file, session, flash
+from flask import Flask, render_template, request, redirect, url_for, send_file, session, flash, jsonify
 
 # Optional libs
 try:
@@ -301,6 +301,128 @@ def plot_corr():
     html = pio.to_html(fig, full_html=False, include_plotlyjs="cdn")
     return html
 
+@app.route("/plot/general")
+def plot_general():
+    df = get_df()
+    df = get_df()
+    if df is None or df.empty:
+        return "<p>Donn\u00e9es insuffisantes.</p>", 400
+
+    plot_type = request.args.get("type", "scatter")
+    x_col = request.args.get("x")
+    y_col = request.args.get("y")
+    z_col = request.args.get("z")
+    color_col = request.args.get("color")
+
+    # histogram only requires x_col
+    if plot_type == "histogram":
+        if not x_col:
+            return "<p>Colonne X requise pour histogramme.</p>", 400
+    else:
+        # for 3D plots require z
+        if plot_type in ("scatter3d","line3d"):
+            if not x_col or not y_col or not z_col:
+                return "<p>Colonnes X, Y et Z requises pour 3D.</p>", 400
+        else:
+            if not x_col or not y_col:
+                return "<p>Colonnes X et Y requises.</p>", 400
+
+    try:
+        df_plot = df.copy()
+        mappings = {}
+
+        # Helper: treat histogram of categorical values as bar of counts
+        if plot_type == "histogram":
+            col = df_plot[x_col]
+            if pd.api.types.is_numeric_dtype(col) or pd.api.types.is_datetime64_any_dtype(col):
+                fig = px.histogram(df_plot, x=x_col, color=color_col, title=f"Histogramme: {x_col}")
+            else:
+                counts = col.astype(str).value_counts().reset_index()
+                counts.columns = [x_col, 'count']
+                fig = px.bar(counts, x=x_col, y='count', title=f"Histogramme (cat\u00e9g.): {x_col}")
+        else:
+            # Prepare X
+            x_ser = df_plot[x_col]
+            # If datetime-like, convert
+            if pd.api.types.is_datetime64_any_dtype(x_ser):
+                df_plot['_x'] = x_ser
+                x_use = '_x'
+            else:
+                # try to parse datetimes
+                try:
+                    x_dt = pd.to_datetime(x_ser, errors='coerce')
+                except Exception:
+                    x_dt = pd.Series([pd.NaT]*len(x_ser))
+                if x_dt.notna().sum() > 0 and x_dt.isna().sum() < len(x_dt):
+                    df_plot['_x'] = x_dt
+                    x_use = '_x'
+                else:
+                    # keep as-is but factorize strings to numeric codes for axes if needed
+                    if pd.api.types.is_numeric_dtype(x_ser):
+                        df_plot['_x'] = x_ser
+                        x_use = '_x'
+                    else:
+                        codes, uniques = pd.factorize(x_ser.astype(str))
+                        df_plot['_x'] = codes
+                        mappings['x'] = list(uniques)
+                        x_use = '_x'
+
+            # Prepare Y
+            y_ser = df_plot[y_col]
+            if pd.api.types.is_numeric_dtype(y_ser):
+                df_plot['_y'] = pd.to_numeric(y_ser, errors='coerce')
+            else:
+                # factorize non-numeric Y so we can still plot; keep mapping
+                codes, uniques = pd.factorize(y_ser.astype(str))
+                df_plot['_y'] = codes
+                mappings['y'] = list(uniques)
+
+            # Build figure with transformed columns
+            if plot_type == 'scatter':
+                fig = px.scatter(df_plot, x=x_use, y='_y', color=color_col if color_col else None,
+                                 title=f"Nuage de points: {x_col} vs {y_col}")
+            elif plot_type == 'line':
+                fig = px.line(df_plot, x=x_use, y='_y', color=color_col if color_col else None,
+                              title=f"Ligne: {x_col} vs {y_col}")
+            elif plot_type == 'scatter3d' or plot_type == 'line3d':
+                # Prepare Z
+                z_ser = df_plot[z_col]
+                if pd.api.types.is_numeric_dtype(z_ser):
+                    df_plot['_z'] = pd.to_numeric(z_ser, errors='coerce')
+                else:
+                    codes, uniques = pd.factorize(z_ser.astype(str))
+                    df_plot['_z'] = codes
+                    mappings['z'] = list(uniques)
+                if plot_type == 'scatter3d':
+                    fig = px.scatter_3d(df_plot, x=x_use, y='_y', z='_z', color=color_col if color_col else None,
+                                        title=f"Nuage 3D: {x_col} vs {y_col} vs {z_col}")
+                else:
+                    fig = px.line_3d(df_plot, x=x_use, y='_y', z='_z', color=color_col if color_col else None,
+                                     title=f"Ligne 3D: {x_col} vs {y_col} vs {z_col}")
+            elif plot_type == 'bar':
+                fig = px.bar(df_plot, x=x_use, y='_y', color=color_col if color_col else None,
+                             title=f"Barres: {x_col} vs {y_col}")
+            elif plot_type == 'box':
+                # box accepts categorical x; use transformed x and y
+                fig = px.box(df_plot, x=x_use, y='_y', color=color_col if color_col else None,
+                             title=f"Bo\u00eete \u00e0 moustaches: {x_col} vs {y_col}")
+            else:
+                return "<p>Type de graphique non support\u00e9.</p>", 400
+
+            # Apply tick label mappings for factorized columns so users see original categories
+            if 'x' in mappings:
+                uniques = mappings['x']
+                fig.update_xaxes(tickmode='array', tickvals=list(range(len(uniques))), ticktext=uniques)
+            if 'y' in mappings:
+                uniques = mappings['y']
+                fig.update_yaxes(tickmode='array', tickvals=list(range(len(uniques))), ticktext=uniques)
+
+        # Serialize with Plotly's to_json (handles numpy types)
+        fig_json = fig.to_json()
+        fig_obj = json.loads(fig_json)
+        return jsonify(fig=fig_obj)
+    except Exception as e:
+        return f"<p>Erreur de g\u00e9n\u00e9ration: {e}</p>", 400
 @app.route("/analyse/anova")
 def anova():
     if not SCIPY_OK:
@@ -336,6 +458,146 @@ def regression():
     r2 = model.score(X, y)
     coefs = {features[i]: float(model.coef_[i]) for i in range(len(features))}
     return f"<p>R² = {r2:.4f}</p><pre>{json.dumps({'coefficients': coefs, 'intercept': float(model.intercept_)}, indent=2)}</pre>"
+
+@app.route("/stats/column")
+def stats_column():
+    """Return descriptive statistics and a small Plotly figure (as JSON) for a given column.
+    Args (query): col, plot (hist|box|none)
+    """
+    df = get_df()
+    if df is None or df.empty:
+        return jsonify(error="Donn\u00e9es insuffisantes."), 400
+    col = request.args.get('col')
+    plot = request.args.get('plot', 'hist')
+    if not col or col not in df.columns:
+        return jsonify(error='Colonne manquante ou inexistante.'), 400
+
+    ser = df[col]
+    stats = {
+        'count': int(ser.count()),
+        'missing': int(ser.isna().sum()),
+    }
+
+    # add numeric summaries when possible
+    if pd.api.types.is_numeric_dtype(ser):
+        snum = pd.to_numeric(ser, errors='coerce')
+        stats.update({
+            'mean': float(snum.mean()) if not snum.dropna().empty else None,
+            'median': float(snum.median()) if not snum.dropna().empty else None,
+            'std': float(snum.std()) if not snum.dropna().empty else None,
+            'min': float(snum.min()) if not snum.dropna().empty else None,
+            'max': float(snum.max()) if not snum.dropna().empty else None,
+        })
+    else:
+        # attempt datetime bounds
+        try:
+            sdt = pd.to_datetime(ser, errors='coerce')
+            if sdt.notna().sum() > 0:
+                stats.update({'min': str(sdt.min()), 'max': str(sdt.max())})
+            else:
+                stats.update({'unique': int(ser.astype(str).nunique())})
+        except Exception:
+            stats.update({'unique': int(ser.astype(str).nunique())})
+
+    fig_obj = None
+    try:
+        if plot == 'hist':
+            if pd.api.types.is_numeric_dtype(ser) or pd.api.types.is_datetime64_any_dtype(ser):
+                fig = px.histogram(df, x=col, title=f"Histogramme: {col}")
+            else:
+                counts = ser.astype(str).value_counts().reset_index()
+                counts.columns = [col, 'count']
+                fig = px.bar(counts, x=col, y='count', title=f"Distribution: {col}")
+        elif plot == 'box':
+            if pd.api.types.is_numeric_dtype(ser):
+                fig = px.box(df, y=col, title=f"Bo\u00eete: {col}")
+            else:
+                counts = ser.astype(str).value_counts().reset_index()
+                counts.columns = [col, 'count']
+                fig = px.bar(counts, x=col, y='count', title=f"Distribution: {col}")
+        else:
+            fig = None
+
+        if fig is not None:
+            try:
+                fig_obj = json.loads(fig.to_json())
+            except Exception:
+                fig_obj = fig.to_dict()
+    except Exception:
+        fig_obj = None
+
+    return jsonify(stats=stats, fig=fig_obj)
+
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    """Train a simple LinearRegression on selected features and return coefficients and optional prediction.
+    Expects JSON body: { 'y': 'target_col', 'x': ['f1','f2'], 'values': { 'f1': val1, 'f2': val2 } }
+    """
+    if not SKLEARN_OK:
+        return jsonify(error='scikit-learn non installé.'), 400
+    df = get_df()
+    if df is None or df.empty:
+        return jsonify(error='Données insuffisantes.'), 400
+    try:
+        payload = request.get_json(force=True)
+    except Exception:
+        return jsonify(error='JSON invalide.'), 400
+    y_col = payload.get('y')
+    x_cols = payload.get('x', [])
+    values = payload.get('values')
+    if not y_col or not x_cols:
+        return jsonify(error='y et x requis.'), 400
+
+    # Prepare training data: handle categoricals by factorize
+    X_df = df[x_cols].copy()
+    mapping = {}
+    for c in X_df.columns:
+        if not pd.api.types.is_numeric_dtype(X_df[c]):
+            codes, uniques = pd.factorize(X_df[c].astype(str))
+            X_df[c] = codes
+            mapping[c] = list(uniques)
+    # Target
+    y_ser = df[y_col]
+    if not pd.api.types.is_numeric_dtype(y_ser):
+        # try to coerce
+        try:
+            y_train = pd.to_numeric(y_ser, errors='coerce').fillna(0).values
+        except Exception:
+            y_train = y_ser.astype('category').cat.codes.values
+    else:
+        y_train = pd.to_numeric(y_ser, errors='coerce').fillna(0).values
+
+    X_train = X_df.fillna(0).values
+    model = LinearRegression().fit(X_train, y_train)
+    coefs = {x_cols[i]: float(model.coef_[i]) for i in range(len(x_cols))}
+    intercept = float(model.intercept_)
+    res = {'r2': model.score(X_train, y_train), 'coefficients': coefs, 'intercept': intercept}
+
+    # If values provided, prepare a single-row input for prediction
+    if values:
+        row = []
+        for c in x_cols:
+            v = values.get(c)
+            if c in mapping:
+                # map categorical value to code if exists, else -1
+                try:
+                    code = mapping[c].index(str(v))
+                except ValueError:
+                    code = -1
+                row.append(code)
+            else:
+                try:
+                    row.append(float(v))
+                except Exception:
+                    row.append(0.0)
+        try:
+            pred = model.predict([row])[0]
+            res['prediction'] = float(pred)
+        except Exception as e:
+            res['prediction_error'] = str(e)
+
+    return jsonify(res)
 
 @app.route("/pivot")
 def pivot():
@@ -376,6 +638,25 @@ def normalize():
     push_history()
     record_step("normalize", {"cols": cols, "method": method})
     return "<p>OK</p>"
+
+@app.route("/calculate")
+def calculate():
+    df = get_df()
+    if df is None or df.empty:
+        return "<p>Données insuffisantes.</p>", 400
+    expr = request.args.get("expr", "")
+    if not expr:
+        return "<p>Expression requise.</p>", 400
+    try:
+        result = pd.eval(expr, engine="python", local_dict={c: df[c] for c in df.columns})
+        if isinstance(result, (int, float)):
+            return f"<p>Résultat: {result}</p>"
+        elif hasattr(result, 'shape'):
+            return f"<p>Résultat: {result.shape[0]} éléments</p><pre>{result.to_string()}</pre>"
+        else:
+            return f"<p>Résultat: {result}</p>"
+    except Exception as e:
+        return f"<p>Erreur: {e}</p>", 400
 
 @app.route("/download/<fmt>")
 def download(fmt):
