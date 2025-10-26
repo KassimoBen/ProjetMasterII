@@ -24,8 +24,16 @@ try:
 except Exception:
     SKLEARN_OK = False
 
+try:
+    import cv2
+    CV2_OK = True
+except Exception:
+    CV2_OK = False
+
 import plotly.express as px
 import plotly.io as pio
+import plotly.graph_objects as go
+from PIL import Image as PILImage, ImageEnhance, ImageFilter
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
@@ -300,6 +308,761 @@ def plot_corr():
     fig = px.imshow(corr, text_auto=True, aspect="auto", title="Matrice de corrélation")
     html = pio.to_html(fig, full_html=False, include_plotlyjs="cdn")
     return html
+
+
+@app.route('/image')
+def image_page():
+    df = get_df()  # keep compatible usage of STORE
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    active = STORE.get(sid, {}).get('active_image', 0) if imgs else None
+    return render_template('image.html', images=imgs, active=active, CV2_OK=CV2_OK)
+
+
+@app.route('/image/upload', methods=['POST'])
+def image_upload():
+    files = request.files.getlist('file')
+    if not files:
+        flash('Aucun fichier sélectionné.', 'warning')
+        return redirect(url_for('image_page'))
+    allowed = ('.png', '.jpg', '.jpeg')
+    max_bytes = 10 * 1024 * 1024
+    sid = get_sid()
+    STORE.setdefault(sid, {}).setdefault('images', [])
+    for file in files:
+        if not file or not file.filename:
+            continue
+        filename = file.filename.lower()
+        if not any(filename.endswith(ext) for ext in allowed):
+            flash(f'Format non supporté pour {file.filename}. Utilisez PNG ou JPG.', 'danger')
+            continue
+        data = file.read()
+        if len(data) > max_bytes:
+            flash(f'Fichier trop volumineux pour {file.filename} (max 10 MB).', 'danger')
+            continue
+        try:
+            img = PILImage.open(io.BytesIO(data)).convert('RGB')
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            preview_bytes = buf.getvalue()
+            # store image entry
+            imgs = STORE[sid].setdefault('images', [])
+            imgs.append({'name': file.filename, 'bytes': data, 'preview': preview_bytes,
+                         'original_bytes': data, 'original_preview': preview_bytes,
+                         'history': [], 'future': []})
+            STORE[sid].setdefault('image_pipeline', [])
+        except Exception as e:
+            flash(f'Erreur lecture image {file.filename}: {e}', 'danger')
+    if STORE[sid].get('images'):
+        STORE[sid]['active_image'] = len(STORE[sid]['images']) - 1
+        flash('Image(s) chargée(s).', 'success')
+    return redirect(url_for('image_page'))
+
+
+@app.route('/image/undo')
+def image_undo():
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs:
+        flash('Aucune image en mémoire.', 'warning')
+        return redirect(url_for('image_page'))
+    idx = STORE.get(sid, {}).get('active_image', 0)
+    entry = imgs[idx]
+    hist = entry.setdefault('history', [])
+    fut = entry.setdefault('future', [])
+    if not hist:
+        flash('Rien à annuler.', 'info')
+        return redirect(url_for('image_page'))
+    # move current to future and pop last history
+    try:
+        fut.append(entry.get('bytes'))
+        prev = hist.pop()
+        entry['bytes'] = prev
+        entry['preview'] = prev
+        flash('Annulation effectuée.', 'success')
+    except Exception as e:
+        flash(f'Erreur undo: {e}', 'danger')
+    return redirect(url_for('image_page'))
+
+
+@app.route('/image/redo')
+def image_redo():
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs:
+        flash('Aucune image en mémoire.', 'warning')
+        return redirect(url_for('image_page'))
+    idx = STORE.get(sid, {}).get('active_image', 0)
+    entry = imgs[idx]
+    hist = entry.setdefault('history', [])
+    fut = entry.setdefault('future', [])
+    if not fut:
+        flash('Rien à rétablir.', 'info')
+        return redirect(url_for('image_page'))
+    try:
+        nxt = fut.pop()
+        hist.append(entry.get('bytes'))
+        entry['bytes'] = nxt
+        entry['preview'] = nxt
+        flash('Rétablissement effectué.', 'success')
+    except Exception as e:
+        flash(f'Erreur redo: {e}', 'danger')
+    return redirect(url_for('image_page'))
+
+
+@app.route('/image/download_processed')
+def image_download_processed():
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs:
+        return "No image", 404
+    idx = STORE.get(sid, {}).get('active_image', 0)
+    data = imgs[idx].get('bytes')
+    name = imgs[idx].get('name', 'image.png')
+    return send_file(io.BytesIO(data), as_attachment=True, download_name=f"processed_{name}", mimetype='image/png')
+
+
+@app.route('/image/preview_orig/<int:idx>')
+def image_preview_orig(idx=0):
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs or idx < 0 or idx >= len(imgs):
+        return "No image", 404
+    img_b = imgs[idx].get('original_preview') or imgs[idx].get('preview')
+    return send_file(io.BytesIO(img_b), mimetype='image/png')
+
+
+
+@app.route('/image/preview/<int:idx>')
+def image_preview(idx=0):
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs or idx < 0 or idx >= len(imgs):
+        return "No image", 404
+    img_b = imgs[idx].get('preview')
+    return send_file(io.BytesIO(img_b), mimetype='image/png')
+
+
+@app.route('/image/select/<int:idx>')
+def image_select(idx=0):
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs or idx < 0 or idx >= len(imgs):
+        flash('Image inexistante.', 'warning')
+        return redirect(url_for('image_page'))
+    STORE[sid]['active_image'] = idx
+    flash(f"Image sélectionnée: {imgs[idx].get('name')}", 'success')
+    return redirect(url_for('image_page'))
+
+
+@app.route('/image/delete/<int:idx>')
+def image_delete(idx=0):
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs or idx < 0 or idx >= len(imgs):
+        flash('Image inexistante.', 'warning')
+        return redirect(url_for('image_page'))
+    name = imgs[idx].get('name')
+    imgs.pop(idx)
+    # adjust active
+    if imgs:
+        STORE[sid]['active_image'] = min(STORE[sid].get('active_image', 0), len(imgs)-1)
+    else:
+        STORE[sid].pop('active_image', None)
+    flash(f'Image supprimée: {name}', 'info')
+    return redirect(url_for('image_page'))
+
+
+@app.route('/image/hist')
+def image_hist():
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs:
+        return "<p>Aucune image chargée.</p>", 400
+    active = STORE.get(sid, {}).get('active_image', 0)
+    img_b = imgs[active]['bytes']
+    try:
+        img = PILImage.open(io.BytesIO(img_b)).convert('RGB')
+        arr = np.array(img)
+        # compute hist per channel
+        bins = list(range(257))
+        r, _ = np.histogram(arr[:, :, 0].flatten(), bins=bins)
+        g, _ = np.histogram(arr[:, :, 1].flatten(), bins=bins)
+        b, _ = np.histogram(arr[:, :, 2].flatten(), bins=bins)
+        x = list(range(256))
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=x, y=r, mode='lines', name='R', line=dict(color='red')))
+        fig.add_trace(go.Scatter(x=x, y=g, mode='lines', name='G', line=dict(color='green')))
+        fig.add_trace(go.Scatter(x=x, y=b, mode='lines', name='B', line=dict(color='blue')))
+        fig.update_layout(title='Histogramme couleurs', xaxis_title='Intensité', yaxis_title='Comptage')
+        html = pio.to_html(fig, full_html=False, include_plotlyjs='cdn')
+        return html
+    except Exception as e:
+        return f"<p>Erreur calcul histogramme: {e}</p>", 500
+
+
+@app.route('/image/measure')
+def image_measure():
+    """Compute contours and measurements for the active image and return JSON (or CSV if format=csv)."""
+    if not CV2_OK:
+        msg = ('OpenCV non installé, mesures indisponibles.\n'
+               'Pour activer les mesures installez OpenCV dans votre environnement:\n'
+               'pip install opencv-python')
+        return jsonify(error=msg), 400
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs:
+        return jsonify(error='Aucune image chargée.'), 400
+    idx = STORE.get(sid, {}).get('active_image', 0)
+    entry = imgs[idx]
+    img_b = entry.get('bytes')
+    try:
+        # decode image
+        nparr = np.frombuffer(img_b, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # parameters: method and retrieval mode
+        method = request.args.get('method', 'canny')
+        retrieval = request.args.get('retr', 'external')
+        retr_mode = cv2.RETR_EXTERNAL if retrieval == 'external' else cv2.RETR_TREE
+
+        # find contours based on chosen method
+        if method == 'canny':
+            low = int(request.args.get('low', 50))
+            high = int(request.args.get('high', 150))
+            edges = cv2.Canny(gray, low, high)
+            cnts, _ = cv2.findContours(edges, retr_mode, cv2.CHAIN_APPROX_SIMPLE)
+        else:
+            thresh_type = request.args.get('thresh_type', 'otsu')
+            if thresh_type == 'otsu':
+                _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            else:
+                tval = int(request.args.get('thresh', 128))
+                _, th = cv2.threshold(gray, tval, 255, cv2.THRESH_BINARY)
+            cnts, _ = cv2.findContours(th, retr_mode, cv2.CHAIN_APPROX_SIMPLE)
+
+        # filtering parameters
+        try:
+            min_area = float(request.args.get('min_area', 0.0))
+        except Exception:
+            min_area = 0.0
+        try:
+            min_perim = float(request.args.get('min_perimeter', 0.0))
+        except Exception:
+            min_perim = 0.0
+        try:
+            approx_eps = float(request.args.get('approx_eps', 0.0))
+        except Exception:
+            approx_eps = 0.0
+        try:
+            min_points = int(request.args.get('min_points', 0))
+        except Exception:
+            min_points = 0
+        try:
+            max_contours = int(request.args.get('max_contours', 0))
+        except Exception:
+            max_contours = 0
+        sort_by = request.args.get('sort_by', 'area')
+
+        measures = []
+        filtered_cnts = []
+        # iterate and filter
+        for c in cnts:
+            area = float(cv2.contourArea(c))
+            peri = float(cv2.arcLength(c, True))
+            # approximation if requested (eps is absolute pixels)
+            c_approx = c
+            pts = int(c.shape[0])
+            if approx_eps and approx_eps > 0:
+                try:
+                    c_approx = cv2.approxPolyDP(c, approx_eps, True)
+                    pts = int(c_approx.shape[0])
+                except Exception:
+                    c_approx = c
+                    pts = int(c.shape[0])
+
+            # apply filters
+            if area < min_area or peri < min_perim or (min_points and pts < min_points):
+                continue
+
+            x, y, w, h = cv2.boundingRect(c_approx)
+            measures.append({'area': area, 'perimeter': peri, 'bbox': [int(x), int(y), int(w), int(h)], 'points': pts, 'raw_contour': c_approx})
+            filtered_cnts.append(c_approx)
+
+        total_found = len(cnts)
+        # sort and limit
+        order = list(range(len(measures)))
+        if sort_by == 'perimeter':
+            order.sort(key=lambda i: measures[i]['perimeter'], reverse=True)
+        else:
+            order.sort(key=lambda i: measures[i]['area'], reverse=True)
+        if max_contours and max_contours > 0:
+            order = order[:max_contours]
+
+        # build overlay: draw all original contours lightly, then selected contours prominently
+        overlay = img.copy()
+        try:
+            # draw all contours faintly
+            cv2.drawContours(overlay, cnts, -1, (150, 150, 150), 1)
+        except Exception:
+            pass
+        selected = []
+        for out_idx, mi in enumerate(order):
+            c = measures[mi]['raw_contour']
+            cv2.drawContours(overlay, [c], -1, (0, 255, 0), 2)
+            # put a small label at centroid
+            M = cv2.moments(c)
+            if M.get('m00', 0):
+                cx = int(M['m10'] / M['m00']); cy = int(M['m01'] / M['m00'])
+                cv2.putText(overlay, str(out_idx), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            selected.append({'id': out_idx, 'area': measures[mi]['area'], 'perimeter': measures[mi]['perimeter'], 'bbox': measures[mi]['bbox'], 'points': measures[mi]['points']})
+
+        # encode overlay
+        _, buf = cv2.imencode('.png', overlay)
+        overlay_bytes = buf.tobytes()
+        entry['last_overlay'] = overlay_bytes
+
+        fmt = request.args.get('format', '').lower()
+        if fmt == 'csv':
+            import csv
+            out = io.StringIO()
+            writer = csv.writer(out)
+            writer.writerow(['id', 'area', 'perimeter', 'bbox_x', 'bbox_y', 'bbox_w', 'bbox_h', 'points'])
+            for m in selected:
+                writer.writerow([m['id'], m['area'], m['perimeter'], *m['bbox'], m.get('points', '')])
+            return send_file(io.BytesIO(out.getvalue().encode('utf-8')), as_attachment=True, download_name='measures.csv', mimetype='text/csv')
+
+        return jsonify(measures=selected, overlay_url=url_for('image_measure_overlay'), total_found=total_found, returned=len(selected))
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@app.route('/image/measure_overlay')
+def image_measure_overlay():
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs:
+        return "No image", 404
+    idx = STORE.get(sid, {}).get('active_image', 0)
+    entry = imgs[idx]
+    data = entry.get('last_overlay')
+    if not data:
+        return "No overlay", 404
+    return send_file(io.BytesIO(data), mimetype='image/png')
+
+
+@app.route('/image/preprocess', methods=['POST'])
+def image_preprocess():
+    """Apply preprocessing operation(s) to the currently active image.
+    Accepts form-data with fields:
+      - op: operation name (see supported_ops)
+      - params: JSON string or individual form fields for parameters
+    Returns: redirect back to image page or JSON when requested.
+    """
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs:
+        flash('Aucune image chargée.', 'warning')
+        return redirect(url_for('image_page'))
+
+    idx = STORE.get(sid, {}).get('active_image', 0)
+    if idx is None or idx < 0 or idx >= len(imgs):
+        flash('Image active invalide.', 'warning')
+        return redirect(url_for('image_page'))
+
+    op = request.form.get('op') or (request.get_json(silent=True) or {}).get('op')
+    # accept params as JSON string or form fields
+    params = {}
+    params_raw = request.form.get('params')
+    if params_raw:
+        try:
+            params = json.loads(params_raw)
+        except Exception:
+            params = {}
+    # also merge individual params
+    for k, v in request.form.items():
+        if k not in ('op', 'params'):
+            params[k] = v
+
+    # load image into OpenCV (BGR)
+    img_b = imgs[idx]['bytes']
+    try:
+        if CV2_OK:
+            nparr = np.frombuffer(img_b, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        else:
+            pil = PILImage.open(io.BytesIO(img_b)).convert('RGB')
+            img = np.array(pil)
+            if CV2_OK:
+                img = img[:, :, ::-1]
+    except Exception as e:
+        flash(f'Erreur lecture image: {e}', 'danger')
+        return redirect(url_for('image_page'))
+
+    # helper converters
+    def to_gray(im):
+        if CV2_OK:
+            return cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        else:
+            return np.array(PILImage.fromarray(im).convert('L'))
+
+    def save_back(im_arr):
+        # im_arr expected as BGR or grayscale
+        try:
+            if isinstance(im_arr, np.ndarray):
+                if im_arr.ndim == 2:
+                    out = PILImage.fromarray(im_arr)
+                else:
+                    rgb = im_arr[:, :, ::-1] if CV2_OK else im_arr
+                    out = PILImage.fromarray(rgb)
+                buf = io.BytesIO()
+                out.save(buf, format='PNG')
+                data = buf.getvalue()
+                # push to history before overwriting
+                imgs[idx].setdefault('history', [])
+                imgs[idx].setdefault('future', [])
+                try:
+                    prev = imgs[idx].get('bytes')
+                    if prev is not None:
+                        imgs[idx]['history'].append(prev)
+                except Exception:
+                    pass
+                imgs[idx]['bytes'] = data
+                # update preview
+                imgs[idx]['preview'] = data
+                # clear redo stack
+                imgs[idx]['future'].clear()
+                # record pipeline
+                STORE[sid].setdefault('image_pipeline', [])
+                STORE[sid]['image_pipeline'].append({'time': datetime.now().isoformat(timespec='seconds'), 'op': op, 'params': params})
+                flash(f"Opération '{op}' appliquée.", 'success')
+                return True
+        except Exception as e:
+            flash(f'Erreur sauvegarde image: {e}', 'danger')
+        return False
+
+    # supported ops
+    try:
+        if not op:
+            flash('Opération non spécifiée.', 'warning')
+            return redirect(url_for('image_page'))
+
+        # numeric helper
+        def _int(k, default=0):
+            try:
+                return int(params.get(k, default))
+            except Exception:
+                return default
+
+        if op == 'grayscale':
+            gray = to_gray(img)
+            save_back(gray)
+
+        elif op == 'resize':
+            w = _int('width', 0)
+            h = _int('height', 0)
+            if w <= 0 or h <= 0:
+                flash('width et height requis pour resize.', 'warning')
+            else:
+                if CV2_OK:
+                    out = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+                else:
+                    pil = PILImage.open(io.BytesIO(img_b)).convert('RGB')
+                    out = np.array(pil.resize((w, h)))
+                save_back(out)
+
+        elif op == 'rotate':
+            angle = float(params.get('angle', 0))
+            pil = PILImage.open(io.BytesIO(img_b)).convert('RGB')
+            out = np.array(pil.rotate(angle, expand=True))
+            save_back(out)
+
+        elif op == 'flip':
+            mode = params.get('mode', 'h')
+            if CV2_OK:
+                if mode == 'h':
+                    out = cv2.flip(img, 1)
+                else:
+                    out = cv2.flip(img, 0)
+            else:
+                pil = PILImage.open(io.BytesIO(img_b)).convert('RGB')
+                if mode == 'h':
+                    out = np.array(pil.transpose(PILImage.FLIP_LEFT_RIGHT))
+                else:
+                    out = np.array(pil.transpose(PILImage.FLIP_TOP_BOTTOM))
+            save_back(out)
+
+        elif op == 'blur_gaussian':
+            k = _int('ksize', 5)
+            if k % 2 == 0: k += 1
+            if CV2_OK:
+                out = cv2.GaussianBlur(img, (k, k), 0)
+            else:
+                pil = PILImage.open(io.BytesIO(img_b)).convert('RGB')
+                out = np.array(pil.filter(ImageFilter.GaussianBlur(radius=k)))
+            save_back(out)
+
+        elif op == 'blur_median':
+            k = _int('ksize', 5)
+            if k % 2 == 0: k += 1
+            if CV2_OK:
+                out = cv2.medianBlur(img, k)
+                save_back(out)
+            else:
+                flash('Median blur requires OpenCV.', 'warning')
+
+        elif op == 'bilateral':
+            d = _int('d', 9)
+            sigmaColor = _int('sigmaColor', 75)
+            sigmaSpace = _int('sigmaSpace', 75)
+            if CV2_OK:
+                out = cv2.bilateralFilter(img, d, sigmaColor, sigmaSpace)
+                save_back(out)
+            else:
+                flash('Bilateral filter requires OpenCV.', 'warning')
+
+        elif op == 'sharpen':
+            if CV2_OK:
+                kernel = np.array([[0,-1,0],[-1,5,-1],[0,-1,0]])
+                out = cv2.filter2D(img, -1, kernel)
+                save_back(out)
+            else:
+                flash('Sharpen requires OpenCV.', 'warning')
+
+        elif op == 'clahe':
+            clip = float(params.get('clipLimit', 2.0))
+            tiles = int(params.get('tileGrid', 8))
+            if CV2_OK:
+                lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+                l, a, b = cv2.split(lab)
+                clahe = cv2.createCLAHE(clipLimit=clip, tileGridSize=(tiles, tiles))
+                cl = clahe.apply(l)
+                merged = cv2.merge((cl, a, b))
+                out = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+                save_back(out)
+            else:
+                flash('CLAHE requires OpenCV.', 'warning')
+
+        elif op == 'contrast_brightness':
+            alpha = float(params.get('alpha', 1.0))
+            beta = float(params.get('beta', 0.0))
+            if CV2_OK:
+                out = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+                save_back(out)
+            else:
+                pil = PILImage.open(io.BytesIO(img_b)).convert('RGB')
+                enhancer = ImageEnhance.Contrast(pil)
+                out_p = enhancer.enhance(alpha)
+                out = np.array(out_p)
+                save_back(out)
+
+        elif op == 'gamma':
+            g = float(params.get('gamma', 1.0))
+            invGamma = 1.0 / g if g != 0 else 1.0
+            table = np.array([((i / 255.0) ** invGamma) * 255 for i in range(256)]).astype('uint8')
+            if CV2_OK:
+                out = cv2.LUT(img, table)
+                save_back(out)
+            else:
+                arr = np.array(PILImage.open(io.BytesIO(img_b)).convert('RGB'))
+                out = table[arr]
+                save_back(out)
+
+        elif op == 'denoise':
+            if CV2_OK:
+                out = cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
+                save_back(out)
+            else:
+                flash('Denoise requires OpenCV.', 'warning')
+
+        elif op == 'canny':
+            low = _int('low', 50)
+            high = _int('high', 150)
+            gray = to_gray(img)
+            if CV2_OK:
+                edges = cv2.Canny(gray, low, high)
+                save_back(edges)
+            else:
+                flash('Canny requires OpenCV.', 'warning')
+
+        elif op == 'otsu':
+            gray = to_gray(img)
+            if CV2_OK:
+                _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                save_back(th)
+            else:
+                flash('Otsu threshold requires OpenCV.', 'warning')
+
+        else:
+            flash('Opération non supportée.', 'warning')
+    except Exception as e:
+        flash(f'Erreur lors du traitement: {e}', 'danger')
+
+    return redirect(url_for('image_page'))
+    return redirect(url_for('image_page'))
+
+
+def _process_image_bytes(img_b, op, params):
+    """Apply a preview-only processing to image bytes and return PNG bytes.
+    Supports a safe subset of operations used for live preview.
+    """
+    try:
+        pil = PILImage.open(io.BytesIO(img_b)).convert('RGB')
+    except Exception as e:
+        raise
+
+    def to_bytes(pil_img):
+        buf = io.BytesIO()
+        pil_img.save(buf, format='PNG')
+        return buf.getvalue()
+
+    # convenience getters
+    def get_int(k, default=None):
+        v = params.get(k)
+        if v is None or v == '':
+            return default
+        try:
+            return int(v)
+        except Exception:
+            try:
+                return int(float(v))
+            except Exception:
+                return default
+
+    def get_float(k, default=None):
+        v = params.get(k)
+        if v is None or v == '':
+            return default
+        try:
+            return float(v)
+        except Exception:
+            return default
+
+    op = (op or '').lower()
+    # grayscale
+    if op == 'grayscale':
+        out = pil.convert('L').convert('RGB')
+        return to_bytes(out)
+
+    if op == 'resize':
+        w = get_int('width')
+        h = get_int('height')
+        if w and h:
+            out = pil.resize((w, h), PILImage.LANCZOS)
+            return to_bytes(out)
+
+    if op == 'rotate':
+        angle = get_float('angle', 0) or 0
+        out = pil.rotate(angle, expand=True)
+        return to_bytes(out)
+
+    if op == 'flip':
+        mode = (params.get('mode') or 'h').lower()
+        if mode == 'v':
+            out = pil.transpose(PILImage.FLIP_TOP_BOTTOM)
+        else:
+            out = pil.transpose(PILImage.FLIP_LEFT_RIGHT)
+        return to_bytes(out)
+
+    if op == 'blur_gaussian':
+        k = get_float('ksize', 2)
+        out = pil.filter(ImageFilter.GaussianBlur(radius=k))
+        return to_bytes(out)
+
+    if op == 'contrast_brightness':
+        alpha = get_float('alpha', 1.0) or 1.0
+        beta = get_float('beta', 0.0) or 0.0
+        enh = ImageEnhance.Contrast(pil)
+        out = enh.enhance(alpha)
+        if beta != 0:
+            be = ImageEnhance.Brightness(out)
+            out = be.enhance(1.0 + (beta / 100.0))
+        return to_bytes(out)
+
+    if op == 'gamma':
+        g = get_float('gamma', 1.0) or 1.0
+        inv = 1.0 / g if g != 0 else 1.0
+        lut = [int(max(0, min(255, pow(i / 255.0, inv) * 255))) for i in range(256)]
+        out = pil.point(lut * 3)
+        return to_bytes(out)
+
+    # OpenCV-backed ops
+    if 'cv2' in globals() and CV2_OK:
+        arr = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+        if op == 'blur_median':
+            k = get_int('ksize', 3) or 3
+            if k % 2 == 0: k += 1
+            out_arr = cv2.medianBlur(arr, k)
+            out = PILImage.fromarray(cv2.cvtColor(out_arr, cv2.COLOR_BGR2RGB))
+            return to_bytes(out)
+
+        if op == 'bilateral':
+            d = get_int('d', 9) or 9
+            sigmaColor = get_int('sigmaColor', 75) or 75
+            sigmaSpace = get_int('sigmaSpace', 75) or 75
+            out_arr = cv2.bilateralFilter(arr, d, sigmaColor, sigmaSpace)
+            out = PILImage.fromarray(cv2.cvtColor(out_arr, cv2.COLOR_BGR2RGB))
+            return to_bytes(out)
+
+        if op == 'clahe':
+            clip = get_float('clipLimit', 2.0) or 2.0
+            tiles = get_int('tileGrid', 8) or 8
+            lab = cv2.cvtColor(arr, cv2.COLOR_BGR2LAB)
+            l, a, b = cv2.split(lab)
+            clahe = cv2.createCLAHE(clipLimit=clip, tileGridSize=(tiles, tiles))
+            cl = clahe.apply(l)
+            merged = cv2.merge((cl, a, b))
+            out_arr = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+            out = PILImage.fromarray(cv2.cvtColor(out_arr, cv2.COLOR_BGR2RGB))
+            return to_bytes(out)
+
+        if op == 'denoise':
+            h = get_float('h', 10) or 10
+            out_arr = cv2.fastNlMeansDenoisingColored(arr, None, h, h, 7, 21)
+            out = PILImage.fromarray(cv2.cvtColor(out_arr, cv2.COLOR_BGR2RGB))
+            return to_bytes(out)
+
+        if op == 'canny':
+            low = get_int('low', 50) or 50
+            high = get_int('high', 150) or 150
+            gray = cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, low, high)
+            out = PILImage.fromarray(edges).convert('RGB')
+            return to_bytes(out)
+
+        if op == 'otsu':
+            gray = cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY)
+            _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            out = PILImage.fromarray(th).convert('RGB')
+            return to_bytes(out)
+
+    # default: return original
+    return to_bytes(pil)
+
+
+@app.route('/image/preview_process', methods=['POST'])
+def image_preview_process():
+    """API for live preview: accepts JSON {op: ..., params: {...}} and returns image/png bytes without saving."""
+    sid = get_sid()
+    imgs = STORE.get(sid, {}).get('images', [])
+    if not imgs:
+        return jsonify(error='Aucune image chargée.'), 400
+    active = STORE.get(sid, {}).get('active_image', 0)
+    if active is None or active < 0 or active >= len(imgs):
+        return jsonify(error='Image active invalide.'), 400
+    img_b = imgs[active]['bytes']
+    try:
+        payload = request.get_json(force=True)
+    except Exception:
+        payload = {}
+    op = payload.get('op')
+    params = payload.get('params', {}) or {}
+    try:
+        out_bytes = _process_image_bytes(img_b, op, params)
+        return send_file(io.BytesIO(out_bytes), mimetype='image/png')
+    except Exception as e:
+        return jsonify(error=str(e)), 500
 
 @app.route("/plot/general")
 def plot_general():

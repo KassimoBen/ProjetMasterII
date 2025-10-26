@@ -6,3 +6,5 @@ openpyxl
 scipy
 scikit-learn
 gunicorn
+opencv-python
+Pillow

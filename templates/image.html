@@ -1,0 +1,388 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row" id="image_app" data-cv2ok="{{ '1' if CV2_OK else '0' }}">
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">Importer des images</div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('image_upload') }}" enctype="multipart/form-data">
+            <input type="file" name="file" accept="image/png,image/jpeg" class="form-control" multiple>
+            <button class="btn btn-primary btn-animated mt-2" type="submit">Charger</button>
+          </form>
+          <hr>
+          <div class="small text-muted">Formats: PNG, JPG — Taille max 10 MB par image.</div>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="card">
+          <div class="card-header">Galerie</div>
+          <div class="card-body">
+            {% if images %}
+              <div class="d-flex flex-wrap gap-2">
+                {% for img in images %}
+                  <div class="border rounded p-1 text-center" style="width:100px">
+                    <img src="{{ url_for('image_preview', idx=loop.index0) }}" style="width:100%;height:70px;object-fit:cover;"/>
+                    <div class="small text-truncate" title="{{ img.name }}">{{ img.name }}</div>
+                    <div class="btn-group mt-1" role="group">
+                      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('image_select', idx=loop.index0) }}">Select</a>
+                      <a class="btn btn-sm btn-outline-danger" href="{{ url_for('image_delete', idx=loop.index0) }}">Delete</a>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="text-muted">Aucune image en mémoire.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">Aperçu actif</div>
+        <div class="card-body text-center">
+          {% if images and active is not none %}
+              <div class="position-relative">
+       <img id="active_preview" src="{{ url_for('image_preview', idx=active) }}" alt="preview" class="img-fluid border rounded" style="max-height:520px; display:block; margin:0 auto;"
+         data-processed="{{ url_for('image_preview', idx=active) }}" data-original="{{ url_for('image_preview_orig', idx=active) }}">
+                <div id="preview_spinner" class="position-absolute top-50 start-50 translate-middle d-none">
+                  <div class="spinner-border text-primary" role="status" style="width:4rem;height:4rem;">
+                    <span class="visually-hidden">Loading...</span>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-2 d-flex gap-2 justify-content-center">
+                <a class="btn btn-outline-secondary" href="{{ url_for('image_hist') }}" target="_blank" data-bs-toggle="tooltip" title="Ouvrir l'histogramme dans un nouvel onglet"><i class="bi bi-bar-chart"></i> Histogramme</a>
+                <button class="btn btn-outline-success" data-hist-url="{{ url_for('image_hist') }}" onclick="window.open(this.dataset.histUrl,'hist','width=800,height=420');" data-bs-toggle="tooltip" title="Ouvrir l'histogramme dans une fenêtre">Afficher Histogramme</button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('image_undo') }}" data-bs-toggle="tooltip" title="Annuler la dernière opération"><i class="bi bi-arrow-counterclockwise"></i> Undo</a>
+                <a class="btn btn-outline-secondary" href="{{ url_for('image_redo') }}" data-bs-toggle="tooltip" title="Rétablir la dernière opération"><i class="bi bi-arrow-clockwise"></i> Redo</a>
+                <a class="btn btn-outline-primary" id="download_processed" href="{{ url_for('image_download_processed') }}" data-bs-toggle="tooltip" title="Télécharger l'image traitée"><i class="bi bi-download"></i> Télécharger</a>
+                <button class="btn btn-outline-dark" id="toggle_compare" data-bs-toggle="tooltip" title="Basculer Avant / Après"><i class="bi bi-columns-gap"></i> Avant/Après</button>
+                <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#helpModal"><i class="bi bi-question-circle"></i> Aide</button>
+              </div>
+            <hr>
+            <div class="mt-3 text-start">
+              <h6>Prétraitements (aperçu en temps réel)</h6>
+              <div class="row g-2" id="preproc_controls">
+                <div class="col-md-4">
+                  <label class="form-label">Opération</label>
+                  <select id="pp_op" class="form-select">
+                    <option value="">(aucune)</option>
+                    <option value="grayscale">Grayscale</option>
+                    <option value="resize">Resize</option>
+                    <option value="rotate">Rotate</option>
+                    <option value="flip">Flip</option>
+                    <option value="blur_gaussian">Gaussian Blur</option>
+                    <option value="blur_median">Median Blur</option>
+                    <option value="bilateral">Bilateral Filter</option>
+                    <option value="sharpen">Sharpen</option>
+                    <option value="clahe">CLAHE (Equalize)</option>
+                    <option value="contrast_brightness">Contrast / Brightness</option>
+                    <option value="gamma">Gamma Correction</option>
+                    <option value="denoise">Denoise</option>
+                    <option value="canny">Canny Edges</option>
+                    <option value="otsu">Otsu Threshold</option>
+                  </select>
+                </div>
+                <div class="col-md-8">
+                  <label class="form-label">Paramètres (les modifications s'appliquent automatiquement)</label>
+                  <div class="row g-2">
+                    <div class="col-4"><input id="pp_width" data-pp-name="width" class="form-control pp-input" placeholder="width (px)"></div>
+                    <div class="col-4"><input id="pp_height" data-pp-name="height" class="form-control pp-input" placeholder="height (px)"></div>
+                    <div class="col-4"><input id="pp_angle" data-pp-name="angle" class="form-control pp-input" placeholder="angle (deg)"></div>
+                    <div class="col-4"><input id="pp_mode" data-pp-name="mode" class="form-control pp-input" placeholder="flip mode: h or v"></div>
+                    <div class="col-4"><input id="pp_ksize" data-pp-name="ksize" class="form-control pp-input" placeholder="ksize (odd)"></div>
+                    <div class="col-4"><input id="pp_d" data-pp-name="d" class="form-control pp-input" placeholder="d (bilateral)"></div>
+                    <div class="col-4"><input id="pp_sigmaColor" data-pp-name="sigmaColor" class="form-control pp-input" placeholder="sigmaColor"></div>
+                    <div class="col-4"><input id="pp_sigmaSpace" data-pp-name="sigmaSpace" class="form-control pp-input" placeholder="sigmaSpace"></div>
+                    <div class="col-4"><input id="pp_clipLimit" data-pp-name="clipLimit" class="form-control pp-input" placeholder="clipLimit (CLAHE)"></div>
+                    <div class="col-4"><input id="pp_tileGrid" data-pp-name="tileGrid" class="form-control pp-input" placeholder="tileGrid (CLAHE)"></div>
+                    <div class="col-4"><input id="pp_alpha" data-pp-name="alpha" class="form-control pp-input" placeholder="alpha (contrast)"></div>
+                    <div class="col-4"><input id="pp_beta" data-pp-name="beta" class="form-control pp-input" placeholder="beta (brightness)"></div>
+                    <div class="col-4"><input id="pp_gamma" data-pp-name="gamma" class="form-control pp-input" placeholder="gamma value"></div>
+                    <div class="col-4"><input id="pp_low" data-pp-name="low" class="form-control pp-input" placeholder="low (canny)"></div>
+                    <div class="col-4"><input id="pp_high" data-pp-name="high" class="form-control pp-input" placeholder="high (canny)"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-2 d-flex gap-2">
+                <button id="pp_apply" class="btn btn-primary">Appliquer et sauvegarder</button>
+                <button id="pp_reset" class="btn btn-outline-secondary">Réinitialiser</button>
+                <div id="pp_status" class="ms-2 align-self-center small text-muted">Aucun changement</div>
+              </div>
+              <div class="mt-3">
+                <div class="card">
+                  <div class="card-header">Mesures & Contours</div>
+                  <div class="card-body">
+                    <div class="mb-2">
+                      <div class="row g-2">
+                        <div class="col-md-3">
+                          <label class="form-label small">Méthode</label>
+                          <select id="m_method" class="form-select form-select-sm">
+                            <option value="canny">Canny (edges)</option>
+                            <option value="otsu">Otsu (threshold)</option>
+                          </select>
+                        </div>
+                        <div class="col-md-3">
+                          <label class="form-label small">Retrieval</label>
+                          <select id="m_retrieval" class="form-select form-select-sm">
+                            <option value="external">External</option>
+                            <option value="tree">Tree</option>
+                          </select>
+                        </div>
+                        <div class="col-md-2">
+                          <label class="form-label small">Min area</label>
+                          <input id="m_min_area" class="form-control form-control-sm" placeholder="0">
+                        </div>
+                        <div class="col-md-2">
+                          <label class="form-label small">Min périm.</label>
+                          <input id="m_min_perimeter" class="form-control form-control-sm" placeholder="0">
+                        </div>
+                        <div class="col-md-2">
+                          <label class="form-label small">Approx eps</label>
+                          <input id="m_approx_eps" class="form-control form-control-sm" placeholder="0 (px)">
+                        </div>
+                      </div>
+                      <div class="row g-2 mt-2">
+                        <div class="col-md-2">
+                          <label class="form-label small">Min points</label>
+                          <input id="m_min_points" class="form-control form-control-sm" placeholder="0">
+                        </div>
+                        <div class="col-md-2">
+                          <label class="form-label small">Max contours</label>
+                          <input id="m_max_contours" class="form-control form-control-sm" placeholder="0 (no limit)">
+                        </div>
+                        <div class="col-md-2">
+                          <label class="form-label small">Trier</label>
+                          <select id="m_sort_by" class="form-select form-select-sm"><option value="area">area</option><option value="perimeter">perimeter</option></select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end justify-content-end">
+                          <div class="btn-group">
+                            <button id="btn_measure" class="btn btn-outline-primary">Calculer contours & mesures</button>
+                            <a id="download_measures" class="btn btn-outline-secondary" href="#" style="display:none">Télécharger CSV</a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div id="measure_results" class="small text-muted">Aucune mesure calculée.</div>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-2">
+                <small class="text-muted">Astuce: modifiez les champs et l'aperçu se mettra à jour automatiquement (prévisualisation uniquement). Cliquez sur "Appliquer et sauvegarder" pour enregistrer l'opération.</small>
+              </div>
+            </div>
+              <!-- Help modal -->
+              <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="helpModalLabel">Aide - Traitement d'image</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                      <p>Utilisez les contrôles pour prévisualiser les traitements en temps réel. Les opérations suivantes sont disponibles :</p>
+                      <ul>
+                        <li><strong>Grayscale</strong> : conversion en niveaux de gris.</li>
+                        <li><strong>Resize</strong> : redimensionnement (width &amp; height en px).</li>
+                        <li><strong>Rotate</strong> : rotation en degrés.</li>
+                        <li><strong>Flip</strong> : horizontal (h) ou vertical (v).</li>
+                        <li><strong>Blur / Denoise / CLAHE</strong> : réduire le bruit et améliorer le contraste local.</li>
+                        <li><strong>Canny / Otsu</strong> : détection de contours et seuillage automatique (nécessite OpenCV).</li>
+                      </ul>
+                      <p>Conseils : appliquez d'abord un léger débruitage (Median/Gaussian), puis CLAHE pour améliorer le contraste avant la détection de contours.</p>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+          {% else %}
+            <div class="text-muted">Aucune image chargée. Utilisez le panneau de gauche pour en charger une.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+</div>
+<script>
+// Live preview for image preprocessing
+(() => {
+  const opSelect = document.getElementById('pp_op');
+  const params = Array.from(document.querySelectorAll('.pp-input'));
+  const preview = document.getElementById('active_preview');
+  let lastUrl = null;
+
+  function debounce(fn, ms){
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(()=>fn(...args), ms); };
+  }
+
+  async function fetchPreview(){
+    const op = opSelect ? opSelect.value : '';
+    const data = { op: op, params: {} };
+    params.forEach(inp => {
+      const k = inp.dataset.ppName || inp.getAttribute('name') || inp.dataset.param;
+      if(!k) return;
+      data.params[k] = inp.value;
+    });
+    const spinner = document.getElementById('preview_spinner');
+    try{
+      if (spinner) spinner.classList.remove('d-none');
+      const res = await fetch('{{ url_for("image_preview_process") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'image/png' },
+        body: JSON.stringify(data)
+      });
+      if(!res.ok){
+        // try to parse JSON error
+        let j = await res.json().catch(()=>null);
+        console.warn('Preview error', j || res.status);
+        if (spinner) spinner.classList.add('d-none');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if(lastUrl){ URL.revokeObjectURL(lastUrl); }
+      lastUrl = url;
+      preview.src = url;
+      if (spinner) spinner.classList.add('d-none');
+    }catch(err){
+      if (spinner) spinner.classList.add('d-none');
+      console.error('Preview fetch failed', err);
+    }
+  }
+
+  const deb = debounce(fetchPreview, 300);
+  // attach listeners
+  if(opSelect) opSelect.addEventListener('change', deb);
+  params.forEach(i => i.addEventListener('input', deb));
+
+  // Apply & save
+  const applyBtn = document.getElementById('pp_apply');
+  const resetBtn = document.getElementById('pp_reset');
+  const statusEl = document.getElementById('pp_status');
+  if (applyBtn) {
+    applyBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const op = opSelect ? opSelect.value : '';
+      if (!op) { alert('Choisissez une opération.'); return; }
+      statusEl.textContent = 'Enregistrement...';
+      const formd = new FormData();
+      formd.append('op', op);
+      params.forEach(inp => {
+        const k = inp.dataset.ppName || inp.name;
+        if (k && inp.value) formd.append(k, inp.value);
+      });
+      try {
+        const r = await fetch('{{ url_for("image_preprocess") }}', { method: 'POST', body: formd });
+        if (r.ok) { location.reload(); }
+        else { const j = await r.json().catch(()=>null); statusEl.textContent = j?.error || 'Erreur sauvegarde'; }
+      } catch (err) { statusEl.textContent = 'Erreur réseau'; }
+    });
+  }
+  if (resetBtn) resetBtn.addEventListener('click', (e) => { e.preventDefault(); location.reload(); });
+  // Avant/Après toggle
+  const toggleBtn = document.getElementById('toggle_compare');
+  if (toggleBtn) {
+    let showingOrig = false;
+    toggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const img = document.getElementById('active_preview');
+      if (!img) return;
+      const orig = img.dataset.original;
+      const proc = img.dataset.processed;
+      if (!showingOrig) {
+        img.src = orig || proc;
+        showingOrig = true;
+        toggleBtn.classList.add('active');
+      } else {
+        img.src = proc;
+        showingOrig = false;
+        toggleBtn.classList.remove('active');
+      }
+    });
+  }
+
+  // Measure button
+  const measureBtn = document.getElementById('btn_measure');
+  const measureResults = document.getElementById('measure_results');
+  const downloadMeasures = document.getElementById('download_measures');
+  // disable measure if OpenCV not available (read from data attribute)
+  const cv2ok = document.getElementById('image_app')?.dataset?.cv2ok === '1';
+  if (!cv2ok) {
+    if (measureBtn) {
+      measureBtn.classList.add('disabled');
+      measureBtn.setAttribute('disabled','disabled');
+    }
+    if (measureResults) measureResults.textContent = 'OpenCV non installé — mesures indisponibles. Installez opencv-python pour activer.';
+  }
+
+  if (measureBtn) {
+    measureBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      measureResults.textContent = 'Calcul en cours...';
+      if (!cv2ok) { measureResults.textContent = 'OpenCV non installé — mesures indisponibles.'; return; }
+      try {
+        // gather params
+        const q = new URLSearchParams();
+        const method = document.getElementById('m_method')?.value;
+        if (method) q.append('method', method);
+        const retr = document.getElementById('m_retrieval')?.value;
+        if (retr) q.append('retr', retr);
+        ['min_area','min_perimeter','approx_eps','min_points','max_contours','sort_by'].forEach(k => {
+          const el = document.getElementById('m_' + k);
+          if (el && el.value) q.append(k, el.value);
+        });
+        // also include canny thresholds from preview inputs if present
+        const low = document.getElementById('pp_low')?.value;
+        const high = document.getElementById('pp_high')?.value;
+        if (low) q.append('low', low);
+        if (high) q.append('high', high);
+
+        const url = '{{ url_for("image_measure") }}' + (q.toString() ? ('?' + q.toString()) : '');
+        const res = await fetch(url);
+        const j = await res.json();
+        if (j.error) { measureResults.textContent = j.error; return; }
+        const measures = j.measures || [];
+        if (!measures.length) {
+          measureResults.textContent = 'Aucun contour détecté.';
+          // still allow CSV (may be empty)
+          downloadMeasures.style.display = 'none';
+          return;
+        }
+        // build HTML table
+        let html = '<table class="table table-sm"><thead><tr><th>#</th><th>Surface</th><th>Périmètre</th><th>BBox</th><th>Points</th></tr></thead><tbody>';
+        measures.forEach(m => {
+          html += `<tr><td>${m.id}</td><td>${m.area.toFixed(1)}</td><td>${m.perimeter.toFixed(1)}</td><td>${m.bbox.join(',')}</td><td>${m.points ?? ''}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        measureResults.innerHTML = html;
+        // show CSV download (preserve same params)
+        downloadMeasures.style.display = 'inline-block';
+        downloadMeasures.href = url + (url.indexOf('?') === -1 ? '?format=csv' : '&format=csv');
+        // show overlay image by replacing preview temporarily
+        if (j.overlay_url) {
+          const prev = document.getElementById('active_preview');
+          if (prev) { prev.src = j.overlay_url; }
+        }
+      } catch (err) {
+        measureResults.textContent = 'Erreur calcul mesures.';
+        console.error(err);
+      }
+    });
+  }
+
+  // no synchronous form used for live preview
+
+  // initial preview when page loads
+  if(opSelect){ setTimeout(fetchPreview, 300); }
+  // bootstrap tooltips init
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl)
+  })
+})();
+</script>
+
+{% endblock %}
