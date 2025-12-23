@@ -2,86 +2,69 @@
 {% block content %}
 <div class="app-row g-3">
   <div class="sidebar">
-    <div class="card sticky-top-2">
-      <div class="card-header">
-        <i class="bi bi-person-circle me-2"></i>Utilisateur
-      </div>
-      <div class="card-body">
-  <form method="post">
-          <input type="hidden" name="action" value="set_user">
-          <label class="form-label" data-bs-toggle="tooltip" title="Entrez votre nom pour personnaliser l'expérience">Votre nom (optionnel)</label>
-          <input class="form-control mb-2" type="text" name="user_name" value="{{ user or '' }}" placeholder="ex: Liva">
-          <button class="btn btn-outline-secondary w-100" data-bs-toggle="tooltip" title="Sauvegarder votre nom">
-            <i class="bi bi-check-circle me-1"></i>Enregistrer
-          </button>
-        </form>
-        <hr>
-        <div class="small text-muted mb-2">
-          <div>Statistiques rapides</div>
-          <div class="d-flex gap-3 mt-2">
-            <div><strong class="counter" data-target="{{ profile.shape[0] if profile }}">0</strong><br><small>lignes</small></div>
-            <div><strong class="counter" data-target="{{ profile.shape[1] if profile }}">0</strong><br><small>colonnes</small></div>
+    <aside class="bg-white rounded-xl shadow-lg p-4 sticky-top-2">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-sky-400 text-white rounded-md flex items-center justify-center font-semibold">U</div>
+          <div>
+            <div class="text-sm font-semibold">Utilisateur</div>
+            <div class="text-xs text-slate-500">Bonjour {{ user or 'Invité' }}</div>
           </div>
         </div>
-        <form method="post" enctype="multipart/form-data">
-          <input type="hidden" name="action" value="upload">
-          <label class="form-label" data-bs-toggle="tooltip" title="Sélectionnez un fichier CSV ou Excel à analyser">Charger CSV/Excel</label>
-          <input class="form-control" type="file" name="file" accept=".csv,.xlsx,.xls">
-          <div class="row mt-2">
-            <div class="col-12 col-md-6">
-              <input class="form-control" name="sep" value="," placeholder="Séparateur CSV" data-bs-toggle="tooltip" title="Caractère séparateur (ex: , ; |)">
-            </div>
-            <div class="col-12 col-md-6">
-              <input class="form-control" name="encoding" value="utf-8" placeholder="Encodage" data-bs-toggle="tooltip" title="Encodage du fichier (ex: utf-8, latin1)">
-            </div>
+        <button class="text-slate-400 hover:text-slate-600" title="Profil"><i class="fas fa-user-circle fa-lg"></i></button>
+      </div>
+
+      <form method="post" class="mb-3">
+        <input type="hidden" name="action" value="set_user">
+        <label class="sr-only">Votre nom (optionnel)</label>
+        <input type="text" name="user_name" value="{{ user or '' }}" placeholder="Votre nom" class="w-full border rounded-lg px-3 py-2 text-sm mb-2">
+        <button class="w-full inline-flex items-center justify-center gap-2 bg-slate-900 text-white rounded-full px-3 py-2 text-sm hover:bg-slate-800" type="submit"><i class="fas fa-check-circle"></i> Enregistrer</button>
+      </form>
+
+      <div class="mb-4 text-sm text-slate-600">
+        <div class="mb-2">Statistiques</div>
+        <div class="flex gap-4">
+          <div class="text-center">
+            <div class="text-lg font-semibold">{{ profile.shape[0] if profile }}</div>
+            <div class="text-xs text-slate-400">lignes</div>
           </div>
-          <div class="mt-2">
-            <label class="form-label" data-bs-toggle="tooltip" title="Choisissez un jeu de données d'exemple">Ou jeu d'essai</label>
-            <select class="form-select" name="sample">
-              <option>(aucun)</option>
-              <option>Iris</option>
-              <option>Ventes</option>
-            </select>
+          <div class="text-center">
+            <div class="text-lg font-semibold">{{ profile.shape[1] if profile }}</div>
+            <div class="text-xs text-slate-400">colonnes</div>
           </div>
-          <button class="btn btn-primary w-100 mt-2" data-bs-toggle="tooltip" title="Charger les données sélectionnées">
-            <i class="bi bi-upload me-1"></i>Charger
-          </button>
-        </form>
-        <hr>
-        <div class="d-grid gap-2">
-          <form method="post">
-            <input type="hidden" name="action" value="undo">
-            <button class="btn btn-outline-secondary" data-bs-toggle="tooltip" title="Annuler la dernière action">
-              <i class="bi bi-arrow-counterclockwise me-1"></i>Annuler
-            </button>
-          </form>
-          <form method="post">
-            <input type="hidden" name="action" value="redo">
-            <button class="btn btn-outline-secondary" data-bs-toggle="tooltip" title="Rétablir la dernière action annulée">
-              <i class="bi bi-arrow-clockwise me-1"></i>Rétablir
-            </button>
-          </form>
-          <form method="post">
-            <input type="hidden" name="action" value="reset">
-            <button class="btn btn-outline-danger" data-bs-toggle="tooltip" title="Réinitialiser toutes les données et l'historique">
-              <i class="bi bi-arrow-repeat me-1"></i>Réinitialiser
-            </button>
-          </form>
-          <a class="btn btn-success" href="{{ url_for('download_project') }}" data-bs-toggle="tooltip" title="Télécharger le projet complet (données + historique)">
-            <i class="bi bi-download me-1"></i>Télécharger projet
-          </a>
-          <a class="btn btn-outline-info mt-2" href="{{ url_for('projects') }}" data-bs-toggle="tooltip" title="Gérer les projets sauvegardés">
-            <i class="bi bi-folder me-1"></i>Gestion projets
-          </a>
-          <a class="btn btn-outline-primary mt-2" href="{{ url_for('image_page') }}" data-bs-toggle="tooltip" title="Insérer des images pour traitement">
-            <i class="bi bi-image me-1"></i>Insérer des images
-          </a>
         </div>
       </div>
-    </div>
+
+      <form method="post" enctype="multipart/form-data" class="mb-3">
+        <input type="hidden" name="action" value="upload">
+        <label class="block text-sm mb-2">Charger CSV / Excel</label>
+        <input class="w-full text-sm mb-2" type="file" name="file" accept=".csv,.xlsx,.xls">
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <input class="border rounded-lg px-2 py-1 text-sm" name="sep" value="," placeholder="," />
+          <input class="border rounded-lg px-2 py-1 text-sm" name="encoding" value="utf-8" placeholder="utf-8" />
+        </div>
+        <select class="w-full border rounded-lg px-2 py-1 text-sm mb-2" name="sample">
+          <option>(aucun)</option>
+          <option>Iris</option>
+          <option>Ventes</option>
+        </select>
+        <button class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-full px-3 py-2 text-sm"> <i class="fas fa-upload"></i> Charger</button>
+      </form>
+
+      <div class="space-y-2">
+        <form method="post"><input type="hidden" name="action" value="undo"><button class="w-full text-left px-3 py-2 rounded-lg border hover:bg-slate-50"><i class="fas fa-undo me-2"></i> Annuler</button></form>
+        <form method="post"><input type="hidden" name="action" value="redo"><button class="w-full text-left px-3 py-2 rounded-lg border hover:bg-slate-50"><i class="fas fa-redo me-2"></i> Rétablir</button></form>
+        <form method="post"><input type="hidden" name="action" value="reset"><button class="w-full text-left px-3 py-2 rounded-lg border hover:bg-red-50 text-red-600"><i class="fas fa-spinner me-2"></i> Réinitialiser</button></form>
+        <div class="pt-2 border-t mt-2">
+          <a class="inline-flex items-center gap-2 w-full justify-center bg-emerald-500 text-white rounded-full px-3 py-2" href="{{ url_for('download_project') }}"><i class="fas fa-download"></i> Télécharger</a>
+          <a class="mt-2 inline-flex items-center gap-2 w-full justify-center bg-indigo-100 text-indigo-700 rounded-full px-3 py-2" href="{{ url_for('projects') }}"><i class="fas fa-folder"></i> Gestion projets</a>
+          <a class="mt-2 inline-flex items-center gap-2 w-full justify-center bg-slate-100 text-slate-700 rounded-full px-3 py-2" href="{{ url_for('image_page') }}"><i class="fas fa-image"></i> Insérer images</a>
+        </div>
+      </div>
+    </aside>
   </div>
 
-  <div>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     {% if df is none or df.empty %}
       <div class="alert alert-info">Chargez un fichier ou un jeu d'essai pour commencer.</div>
     {% else %}
@@ -98,17 +81,21 @@
     </ul>
     <div class="tab-content border-start border-end border-bottom p-3">
       <div class="tab-pane fade show active" id="apercu" role="tabpanel">
-        <h5><i class="bi bi-eye me-2"></i>Aperçu des données</h5>
+        <div class="flex items-center justify-between mb-4">
+          <h5 class="text-lg font-semibold"><i class="fas fa-eye me-2"></i>Aperçu des données</h5>
+          <div class="flex gap-2">
+            <a class="inline-flex items-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-full" href="#" onclick="location.reload();"><i class="fas fa-sync-alt"></i> Rafraîchir</a>
+          </div>
+        </div>
         <div class="row">
           <div class="col-md-8">
-            <div class="card">
-              <div class="card-header">
-                <i class="bi bi-table me-2"></i>Tableau des données (premières 200 lignes)
+            <div class="bg-white rounded-xl shadow p-4">
+              <div class="flex items-center justify-between mb-3">
+                <div class="text-sm font-semibold"><i class="fas fa-table me-2"></i>Tableau des données (premières 200 lignes)</div>
+                <div class="text-xs text-slate-400">Aperçu</div>
               </div>
-              <div class="card-body p-0">
-                <div class="table-responsive">
-                  {{ df|head(200)|safe }}
-                </div>
+              <div class="overflow-auto">
+                {{ df|head(200)|safe }}
               </div>
             </div>
           </div>
