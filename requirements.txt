@@ -8,3 +8,12 @@ scikit-learn
 gunicorn
 opencv-python
 Pillow
+reportlab
+statsmodels
+seaborn
+python-docx
+xlsxwriter
+folium
+nltk
+textblob
+gensim

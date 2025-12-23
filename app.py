@@ -1456,6 +1456,118 @@ def download_project():
     buffer.seek(0)
     return send_file(buffer, as_attachment=True, download_name="projet_datalab.zip", mimetype="application/zip")
 
+
+@app.route("/download_current_project")
+def download_current_project():
+    """Compatibility wrapper for templates that reference `download_current_project`.
+    Delegates to `download_project` which returns the same ZIP for the current session.
+    """
+    # call existing function to produce the same artifact
+    return download_project()
+
+
+@app.route('/projects')
+def projects():
+    """List saved project ZIPs in the `projects/` directory."""
+    import os
+    projects_dir = os.path.join(os.path.dirname(__file__), 'projects')
+    os.makedirs(projects_dir, exist_ok=True)
+    files = [f for f in os.listdir(projects_dir) if f.lower().endswith('.zip')]
+    projects_list = []
+    for f in files:
+        full = os.path.join(projects_dir, f)
+        try:
+            stat = os.stat(full)
+            projects_list.append({
+                'name': os.path.splitext(f)[0],
+                'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(timespec='seconds'),
+                'size': stat.st_size
+            })
+        except Exception:
+            projects_list.append({'name': os.path.splitext(f)[0], 'modified': '', 'size': 0})
+    return render_template('projects.html', projects=projects_list)
+
+
+@app.route('/project/save', methods=['POST'])
+def save_project():
+    """Save current dataframe and pipeline as a ZIP in projects/"""
+    import os
+    name = request.form.get('name') or f"projet_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    # sanitize
+    name = "".join(c for c in name if c.isalnum() or c in "()._ -")
+    df = get_df()
+    if df is None:
+        return jsonify(error='Aucune donnée à sauvegarder.'), 400
+    sid = get_sid()
+    pipeline = STORE.get(sid, {}).get('pipeline', [])
+    projects_dir = os.path.join(os.path.dirname(__file__), 'projects')
+    os.makedirs(projects_dir, exist_ok=True)
+    filepath = os.path.join(projects_dir, f"{name}.zip")
+    try:
+        with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as z:
+            z.writestr('data.csv', df.to_csv(index=False))
+            z.writestr('pipeline.json', json.dumps(pipeline, ensure_ascii=False, indent=2))
+            z.writestr('meta.json', json.dumps({'created': datetime.now().isoformat(timespec='seconds'), 'user': session.get('user','')}, ensure_ascii=False))
+        return jsonify(message=f"Projet '{name}' sauvegardé", name=name)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@app.route('/project/load/<project_name>')
+def load_project(project_name):
+    import os
+    import zipfile
+    # sanitize
+    project_name = "".join(c for c in project_name if c.isalnum() or c in "()._ -")
+    projects_dir = os.path.join(os.path.dirname(__file__), 'projects')
+    filepath = os.path.join(projects_dir, f"{project_name}.zip")
+    if not os.path.exists(filepath):
+        flash(f"Projet '{project_name}' non trouvé", 'danger')
+        return redirect(url_for('projects'))
+    try:
+        with zipfile.ZipFile(filepath, 'r') as z:
+            csvb = z.read('data.csv').decode('utf-8')
+            df = pd.read_csv(io.StringIO(csvb))
+            pipeline = json.loads(z.read('pipeline.json').decode('utf-8')) if 'pipeline.json' in z.namelist() else []
+        set_df(df)
+        sid = get_sid()
+        STORE[sid]['pipeline'] = pipeline
+        flash(f"Projet '{project_name}' chargé", 'success')
+    except Exception as e:
+        flash(f"Erreur chargement projet: {e}", 'danger')
+    return redirect(url_for('index'))
+
+
+@app.route('/project/delete/<project_name>')
+def delete_project(project_name):
+    import os
+    # sanitize
+    project_name = "".join(c for c in project_name if c.isalnum() or c in "()._ -")
+    projects_dir = os.path.join(os.path.dirname(__file__), 'projects')
+    filepath = os.path.join(projects_dir, f"{project_name}.zip")
+    if os.path.exists(filepath):
+        try:
+            os.remove(filepath)
+            flash(f"Projet '{project_name}' supprimé", 'info')
+        except Exception as e:
+            flash(f"Erreur suppression: {e}", 'danger')
+    else:
+        flash(f"Projet '{project_name}' non trouvé", 'warning')
+    return redirect(url_for('projects'))
+
+
+@app.route('/projects/download/<project_name>')
+def projects_download(project_name):
+    import os
+    # sanitize
+    project_name = "".join(c for c in project_name if c.isalnum() or c in "()._ -")
+    projects_dir = os.path.join(os.path.dirname(__file__), 'projects')
+    filepath = os.path.join(projects_dir, f"{project_name}.zip")
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True, download_name=f"{project_name}.zip")
+    flash(f"Projet '{project_name}' non trouvé", 'warning')
+    return redirect(url_for('projects'))
+
 @app.template_filter("head")
 def head_filter(df, n=100):
     try:

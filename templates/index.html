@@ -1,12 +1,9 @@
 {% extends "layout.html" %}
 {% block content %}
-<style>
-  .card-header i { color: var(--primary-700); margin-right: 8px; }
-</style>
 <div class="app-row g-3">
   <div class="sidebar">
-  <div class="card sticky-top-2">
-      <div class="card-header bg-primary text-white">
+    <div class="card sticky-top-2">
+      <div class="card-header">
         <i class="bi bi-person-circle me-2"></i>Utilisateur
       </div>
       <div class="card-body">
@@ -31,10 +28,10 @@
           <label class="form-label" data-bs-toggle="tooltip" title="Sélectionnez un fichier CSV ou Excel à analyser">Charger CSV/Excel</label>
           <input class="form-control" type="file" name="file" accept=".csv,.xlsx,.xls">
           <div class="row mt-2">
-            <div class="col">
+            <div class="col-12 col-md-6">
               <input class="form-control" name="sep" value="," placeholder="Séparateur CSV" data-bs-toggle="tooltip" title="Caractère séparateur (ex: , ; |)">
             </div>
-            <div class="col">
+            <div class="col-12 col-md-6">
               <input class="form-control" name="encoding" value="utf-8" placeholder="Encodage" data-bs-toggle="tooltip" title="Encodage du fichier (ex: utf-8, latin1)">
             </div>
           </div>
@@ -73,6 +70,9 @@
           <a class="btn btn-success" href="{{ url_for('download_project') }}" data-bs-toggle="tooltip" title="Télécharger le projet complet (données + historique)">
             <i class="bi bi-download me-1"></i>Télécharger projet
           </a>
+          <a class="btn btn-outline-info mt-2" href="{{ url_for('projects') }}" data-bs-toggle="tooltip" title="Gérer les projets sauvegardés">
+            <i class="bi bi-folder me-1"></i>Gestion projets
+          </a>
           <a class="btn btn-outline-primary mt-2" href="{{ url_for('image_page') }}" data-bs-toggle="tooltip" title="Insérer des images pour traitement">
             <i class="bi bi-image me-1"></i>Insérer des images
           </a>
@@ -86,15 +86,15 @@
       <div class="alert alert-info">Chargez un fichier ou un jeu d'essai pour commencer.</div>
     {% else %}
     <ul class="nav nav-tabs" id="myTab" role="tablist">
-      <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#apercu" type="button" role="tab">Aperçu</button></li>
-      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#nettoyage" type="button" role="tab">Nettoyage</button></li>
-      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#transform" type="button" role="tab">Transformation</button></li>
-      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#calcul" type="button" role="tab">Calculs</button></li>
-      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#analyse" type="button" role="tab">Analyse</button></li>
-      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#visualisation" type="button" role="tab">Visualisation</button></li>
-      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pivot" type="button" role="tab">Pivot</button></li>
-      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#export" type="button" role="tab">Export</button></li>
-      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rapport" type="button" role="tab">Rapport</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#apercu" type="button" role="tab"><i class="bi bi-eye me-1"></i>Aperçu</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#nettoyage" type="button" role="tab"><i class="bi bi-broom me-1"></i>Nettoyage</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#transform" type="button" role="tab"><i class="bi bi-gear me-1"></i>Transformation</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#calcul" type="button" role="tab"><i class="bi bi-calculator me-1"></i>Calculs</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#analyse" type="button" role="tab"><i class="bi bi-bar-chart-line me-1"></i>Analyse</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#visualisation" type="button" role="tab"><i class="bi bi-graph-up me-1"></i>Visualisation</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pivot" type="button" role="tab"><i class="bi bi-table me-1"></i>Pivot</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#export" type="button" role="tab"><i class="bi bi-box-arrow-up-right me-1"></i>Export</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rapport" type="button" role="tab"><i class="bi bi-file-text me-1"></i>Rapport</button></li>
     </ul>
     <div class="tab-content border-start border-end border-bottom p-3">
       <div class="tab-pane fade show active" id="apercu" role="tabpanel">

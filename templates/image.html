@@ -1,49 +1,69 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row" id="image_app" data-cv2ok="{{ '1' if CV2_OK else '0' }}">
-    <div class="col-md-4">
+    <div class="col-12 col-md-4">
       <div class="card">
-        <div class="card-header">Importer des images</div>
+        <div class="card-header">
+          <i class="bi bi-upload me-2"></i>Importer des images
+        </div>
         <div class="card-body">
           <form method="post" action="{{ url_for('image_upload') }}" enctype="multipart/form-data">
-            <input type="file" name="file" accept="image/png,image/jpeg" class="form-control" multiple>
-            <button class="btn btn-primary btn-animated mt-2" type="submit">Charger</button>
+            <input type="file" name="file" accept="image/png,image/jpeg" class="form-control mb-2" multiple>
+            <button class="btn btn-primary w-100" type="submit">
+              <i class="bi bi-cloud-upload me-2"></i>Charger
+            </button>
           </form>
           <hr>
-          <div class="small text-muted">Formats: PNG, JPG — Taille max 10 MB par image.</div>
+          <div class="small text-muted text-center">
+            <i class="bi bi-file-earmark-image text-info me-1"></i>Formats: PNG, JPG — Taille max 10 MB par image.
+          </div>
         </div>
       </div>
       <div class="mt-3">
         <div class="card">
-          <div class="card-header">Galerie</div>
+          <div class="card-header">
+            <i class="bi bi-images me-2"></i>Galerie
+          </div>
           <div class="card-body">
             {% if images %}
-              <div class="d-flex flex-wrap gap-2">
+              <div class="d-flex flex-wrap gap-2 justify-content-center">
                 {% for img in images %}
-                  <div class="border rounded p-1 text-center" style="width:100px">
-                    <img src="{{ url_for('image_preview', idx=loop.index0) }}" style="width:100%;height:70px;object-fit:cover;"/>
-                    <div class="small text-truncate" title="{{ img.name }}">{{ img.name }}</div>
-                    <div class="btn-group mt-1" role="group">
-                      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('image_select', idx=loop.index0) }}">Select</a>
-                      <a class="btn btn-sm btn-outline-danger" href="{{ url_for('image_delete', idx=loop.index0) }}">Delete</a>
+                  <div class="border rounded p-2 text-center" style="width:120px; transition: transform 0.2s;">
+                    <img src="{{ url_for('image_preview', idx=loop.index0) }}" style="width:100%;height:80px;object-fit:cover; border-radius: 5px;"/>
+                    <div class="small text-truncate mt-1" title="{{ img.name }}" style="font-size: 0.8rem;">
+                      <i class="bi bi-file-earmark-image text-info me-1"></i>
+                      {{ img.name[:12] }}{% if img.name|length > 12 %}...{% endif %}
+                    </div>
+                    <div class="btn-group btn-group-sm mt-2" role="group">
+                      <a class="btn btn-outline-primary" href="{{ url_for('image_select', idx=loop.index0) }}" data-bs-toggle="tooltip" title="Sélectionner cette image">
+                        <i class="bi bi-check-circle"></i>
+                      </a>
+                      <a class="btn btn-outline-danger" href="{{ url_for('image_delete', idx=loop.index0) }}" data-bs-toggle="tooltip" title="Supprimer cette image">
+                        <i class="bi bi-trash"></i>
+                      </a>
                     </div>
                   </div>
                 {% endfor %}
               </div>
             {% else %}
-              <div class="text-muted">Aucune image en mémoire.</div>
+              <div class="text-center text-muted py-3">
+                <i class="bi bi-image-slash fs-1 d-block mb-2"></i>
+                Aucune image en mémoire.
+              </div>
             {% endif %}
           </div>
         </div>
       </div>
     </div>
-    <div class="col-md-8">
+    <div class="col-12 col-md-8">
       <div class="card">
-        <div class="card-header">Aperçu actif</div>
+        <div class="card-header">
+          <i class="bi bi-eye me-2"></i>Aperçu actif
+        </div>
         <div class="card-body text-center">
           {% if images and active is not none %}
               <div class="position-relative">
-       <img id="active_preview" src="{{ url_for('image_preview', idx=active) }}" alt="preview" class="img-fluid border rounded" style="max-height:520px; display:block; margin:0 auto;"
+       <img id="active_preview" src="{{ url_for('image_preview', idx=active) }}" alt="preview" class="img-fluid border rounded" style="max-height:520px; display:block; margin:0 auto; object-fit: contain;"
          data-processed="{{ url_for('image_preview', idx=active) }}" data-original="{{ url_for('image_preview_orig', idx=active) }}">
                 <div id="preview_spinner" class="position-absolute top-50 start-50 translate-middle d-none">
                   <div class="spinner-border text-primary" role="status" style="width:4rem;height:4rem;">
@@ -51,21 +71,35 @@
                   </div>
                 </div>
               </div>
-              <div class="mt-2 d-flex gap-2 justify-content-center">
-                <a class="btn btn-outline-secondary" href="{{ url_for('image_hist') }}" target="_blank" data-bs-toggle="tooltip" title="Ouvrir l'histogramme dans un nouvel onglet"><i class="bi bi-bar-chart"></i> Histogramme</a>
-                <button class="btn btn-outline-success" data-hist-url="{{ url_for('image_hist') }}" onclick="window.open(this.dataset.histUrl,'hist','width=800,height=420');" data-bs-toggle="tooltip" title="Ouvrir l'histogramme dans une fenêtre">Afficher Histogramme</button>
-                <a class="btn btn-outline-secondary" href="{{ url_for('image_undo') }}" data-bs-toggle="tooltip" title="Annuler la dernière opération"><i class="bi bi-arrow-counterclockwise"></i> Undo</a>
-                <a class="btn btn-outline-secondary" href="{{ url_for('image_redo') }}" data-bs-toggle="tooltip" title="Rétablir la dernière opération"><i class="bi bi-arrow-clockwise"></i> Redo</a>
-                <a class="btn btn-outline-primary" id="download_processed" href="{{ url_for('image_download_processed') }}" data-bs-toggle="tooltip" title="Télécharger l'image traitée"><i class="bi bi-download"></i> Télécharger</a>
-                <button class="btn btn-outline-dark" id="toggle_compare" data-bs-toggle="tooltip" title="Basculer Avant / Après"><i class="bi bi-columns-gap"></i> Avant/Après</button>
-                <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#helpModal"><i class="bi bi-question-circle"></i> Aide</button>
+              <div class="mt-3 d-flex flex-wrap gap-2 justify-content-center">
+                <a class="btn btn-outline-info" href="{{ url_for('image_hist') }}" target="_blank" data-bs-toggle="tooltip" title="Ouvrir l'histogramme dans un nouvel onglet">
+                  <i class="bi bi-bar-chart me-1"></i> Histogramme
+                </a>
+                <button class="btn btn-outline-success" data-hist-url="{{ url_for('image_hist') }}" onclick="window.open(this.dataset.histUrl,'hist','width=800,height=420');" data-bs-toggle="tooltip" title="Ouvrir l'histogramme dans une fenêtre">
+                  <i class="bi bi-graph-up me-1"></i> Afficher Histogramme
+                </button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('image_undo') }}" data-bs-toggle="tooltip" title="Annuler la dernière opération">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i> Undo
+                </a>
+                <a class="btn btn-outline-secondary" href="{{ url_for('image_redo') }}" data-bs-toggle="tooltip" title="Rétablir la dernière opération">
+                  <i class="bi bi-arrow-clockwise me-1"></i> Redo
+                </a>
+                <a class="btn btn-outline-primary" id="download_processed" href="{{ url_for('image_download_processed') }}" data-bs-toggle="tooltip" title="Télécharger l'image traitée">
+                  <i class="bi bi-download me-1"></i> Télécharger
+                </a>
+                <button class="btn btn-outline-dark" id="toggle_compare" data-bs-toggle="tooltip" title="Basculer Avant / Après">
+                  <i class="bi bi-columns-gap me-1"></i> Avant/Après
+                </button>
+                <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#helpModal">
+                  <i class="bi bi-question-circle me-1"></i> Aide
+                </button>
               </div>
             <hr>
             <div class="mt-3 text-start">
-              <h6>Prétraitements (aperçu en temps réel)</h6>
+              <h6><i class="bi bi-sliders me-2"></i>Prétraitements (aperçu en temps réel)</h6>
               <div class="row g-2" id="preproc_controls">
-                <div class="col-md-4">
-                  <label class="form-label">Opération</label>
+                <div class="col-12 col-md-4">
+                  <label class="form-label"><i class="bi bi-gear me-1"></i>Opération</label>
                   <select id="pp_op" class="form-select">
                     <option value="">(aucune)</option>
                     <option value="grayscale">Grayscale</option>
@@ -84,91 +118,109 @@
                     <option value="otsu">Otsu Threshold</option>
                   </select>
                 </div>
-                <div class="col-md-8">
-                  <label class="form-label">Paramètres (les modifications s'appliquent automatiquement)</label>
+                <div class="col-12 col-md-8">
+                  <label class="form-label"><i class="bi bi-sliders2 me-1"></i>Paramètres (les modifications s'appliquent automatiquement)</label>
                   <div class="row g-2">
-                    <div class="col-4"><input id="pp_width" data-pp-name="width" class="form-control pp-input" placeholder="width (px)"></div>
-                    <div class="col-4"><input id="pp_height" data-pp-name="height" class="form-control pp-input" placeholder="height (px)"></div>
-                    <div class="col-4"><input id="pp_angle" data-pp-name="angle" class="form-control pp-input" placeholder="angle (deg)"></div>
-                    <div class="col-4"><input id="pp_mode" data-pp-name="mode" class="form-control pp-input" placeholder="flip mode: h or v"></div>
-                    <div class="col-4"><input id="pp_ksize" data-pp-name="ksize" class="form-control pp-input" placeholder="ksize (odd)"></div>
-                    <div class="col-4"><input id="pp_d" data-pp-name="d" class="form-control pp-input" placeholder="d (bilateral)"></div>
-                    <div class="col-4"><input id="pp_sigmaColor" data-pp-name="sigmaColor" class="form-control pp-input" placeholder="sigmaColor"></div>
-                    <div class="col-4"><input id="pp_sigmaSpace" data-pp-name="sigmaSpace" class="form-control pp-input" placeholder="sigmaSpace"></div>
-                    <div class="col-4"><input id="pp_clipLimit" data-pp-name="clipLimit" class="form-control pp-input" placeholder="clipLimit (CLAHE)"></div>
-                    <div class="col-4"><input id="pp_tileGrid" data-pp-name="tileGrid" class="form-control pp-input" placeholder="tileGrid (CLAHE)"></div>
-                    <div class="col-4"><input id="pp_alpha" data-pp-name="alpha" class="form-control pp-input" placeholder="alpha (contrast)"></div>
-                    <div class="col-4"><input id="pp_beta" data-pp-name="beta" class="form-control pp-input" placeholder="beta (brightness)"></div>
-                    <div class="col-4"><input id="pp_gamma" data-pp-name="gamma" class="form-control pp-input" placeholder="gamma value"></div>
-                    <div class="col-4"><input id="pp_low" data-pp-name="low" class="form-control pp-input" placeholder="low (canny)"></div>
-                    <div class="col-4"><input id="pp_high" data-pp-name="high" class="form-control pp-input" placeholder="high (canny)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_width" data-pp-name="width" class="form-control pp-input" placeholder="width (px)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_height" data-pp-name="height" class="form-control pp-input" placeholder="height (px)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_angle" data-pp-name="angle" class="form-control pp-input" placeholder="angle (deg)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_mode" data-pp-name="mode" class="form-control pp-input" placeholder="flip mode: h or v"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_ksize" data-pp-name="ksize" class="form-control pp-input" placeholder="ksize (odd)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_d" data-pp-name="d" class="form-control pp-input" placeholder="d (bilateral)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_sigmaColor" data-pp-name="sigmaColor" class="form-control pp-input" placeholder="sigmaColor"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_sigmaSpace" data-pp-name="sigmaSpace" class="form-control pp-input" placeholder="sigmaSpace"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_clipLimit" data-pp-name="clipLimit" class="form-control pp-input" placeholder="clipLimit (CLAHE)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_tileGrid" data-pp-name="tileGrid" class="form-control pp-input" placeholder="tileGrid (CLAHE)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_alpha" data-pp-name="alpha" class="form-control pp-input" placeholder="alpha (contrast)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_beta" data-pp-name="beta" class="form-control pp-input" placeholder="beta (brightness)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_gamma" data-pp-name="gamma" class="form-control pp-input" placeholder="gamma value"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_low" data-pp-name="low" class="form-control pp-input" placeholder="low (canny)"></div>
+                    <div class="col-12 col-sm-6 col-md-4"><input id="pp_high" data-pp-name="high" class="form-control pp-input" placeholder="high (canny)"></div>
                   </div>
                 </div>
               </div>
-              <div class="mt-2 d-flex gap-2">
-                <button id="pp_apply" class="btn btn-primary">Appliquer et sauvegarder</button>
-                <button id="pp_reset" class="btn btn-outline-secondary">Réinitialiser</button>
-                <div id="pp_status" class="ms-2 align-self-center small text-muted">Aucun changement</div>
+              <div class="mt-3 d-flex flex-wrap gap-2">
+                <button id="pp_apply" class="btn btn-success flex-fill">
+                  <i class="bi bi-check-circle me-1"></i>Appliquer et sauvegarder
+                </button>
+                <button id="pp_reset" class="btn btn-outline-warning flex-fill">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Réinitialiser
+                </button>
+                <div id="pp_status" class="ms-2 align-self-center small text-muted d-flex align-items-center">
+                  <i class="bi bi-info-circle me-1"></i>Aucun changement
+                </div>
               </div>
-              <div class="mt-3">
+              <div class="mt-4">
                 <div class="card">
-                  <div class="card-header">Mesures & Contours</div>
+                  <div class="card-header">
+                    <i class="bi bi-rulers me-2"></i>Mesures & Contours
+                  </div>
                   <div class="card-body">
                     <div class="mb-2">
                       <div class="row g-2">
-                        <div class="col-md-3">
-                          <label class="form-label small">Méthode</label>
+                        <div class="col-12 col-md-3">
+                          <label class="form-label small"><i class="bi bi-gear me-1"></i>Méthode</label>
                           <select id="m_method" class="form-select form-select-sm">
                             <option value="canny">Canny (edges)</option>
                             <option value="otsu">Otsu (threshold)</option>
                           </select>
                         </div>
-                        <div class="col-md-3">
-                          <label class="form-label small">Retrieval</label>
+                        <div class="col-12 col-md-3">
+                          <label class="form-label small"><i class="bi bi-diagram-3 me-1"></i>Retrieval</label>
                           <select id="m_retrieval" class="form-select form-select-sm">
                             <option value="external">External</option>
                             <option value="tree">Tree</option>
                           </select>
                         </div>
-                        <div class="col-md-2">
-                          <label class="form-label small">Min area</label>
+                        <div class="col-12 col-md-2">
+                          <label class="form-label small"><i class="bi bi-rulers me-1"></i>Min area</label>
                           <input id="m_min_area" class="form-control form-control-sm" placeholder="0">
                         </div>
-                        <div class="col-md-2">
-                          <label class="form-label small">Min périm.</label>
+                        <div class="col-12 col-md-2">
+                          <label class="form-label small"><i class="bi bi-rulers me-1"></i>Min périm.</label>
                           <input id="m_min_perimeter" class="form-control form-control-sm" placeholder="0">
                         </div>
-                        <div class="col-md-2">
-                          <label class="form-label small">Approx eps</label>
+                        <div class="col-12 col-md-2">
+                          <label class="form-label small"><i class="bi bi-shape me-1"></i>Approx eps</label>
                           <input id="m_approx_eps" class="form-control form-control-sm" placeholder="0 (px)">
                         </div>
                       </div>
                       <div class="row g-2 mt-2">
-                        <div class="col-md-2">
-                          <label class="form-label small">Min points</label>
+                        <div class="col-12 col-md-2">
+                          <label class="form-label small"><i class="bi bi-list-check me-1"></i>Min points</label>
                           <input id="m_min_points" class="form-control form-control-sm" placeholder="0">
                         </div>
-                        <div class="col-md-2">
-                          <label class="form-label small">Max contours</label>
+                        <div class="col-12 col-md-2">
+                          <label class="form-label small"><i class="bi bi-list-nested me-1"></i>Max contours</label>
                           <input id="m_max_contours" class="form-control form-control-sm" placeholder="0 (no limit)">
                         </div>
-                        <div class="col-md-2">
-                          <label class="form-label small">Trier</label>
-                          <select id="m_sort_by" class="form-select form-select-sm"><option value="area">area</option><option value="perimeter">perimeter</option></select>
+                        <div class="col-12 col-md-2">
+                          <label class="form-label small"><i class="bi bi-sort-numeric-down me-1"></i>Trier</label>
+                          <select id="m_sort_by" class="form-select form-select-sm">
+                            <option value="area">area</option>
+                            <option value="perimeter">perimeter</option>
+                          </select>
                         </div>
-                        <div class="col-md-6 d-flex align-items-end justify-content-end">
-                          <div class="btn-group">
-                            <button id="btn_measure" class="btn btn-outline-primary">Calculer contours & mesures</button>
-                            <a id="download_measures" class="btn btn-outline-secondary" href="#" style="display:none">Télécharger CSV</a>
+                        <div class="col-12 col-md-6 d-flex align-items-end justify-content-end">
+                          <div class="btn-group flex-wrap">
+                            <button id="btn_measure" class="btn btn-primary">
+                              <i class="bi bi-calculator me-1"></i>Calculer contours & mesures
+                            </button>
+                            <a id="download_measures" class="btn btn-outline-success" href="#" style="display:none">
+                              <i class="bi bi-download me-1"></i>Télécharger CSV
+                            </a>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div id="measure_results" class="small text-muted">Aucune mesure calculée.</div>
+                    <div id="measure_results" class="small text-muted mt-3">
+                      <i class="bi bi-info-circle me-1"></i>Aucune mesure calculée.
+                    </div>
                   </div>
                 </div>
               </div>
-              <div class="mt-2">
+              <div class="mt-3 p-3 bg-light rounded">
+                <i class="bi bi-lightbulb me-2 text-warning"></i>
                 <small class="text-muted">Astuce: modifiez les champs et l'aperçu se mettra à jour automatiquement (prévisualisation uniquement). Cliquez sur "Appliquer et sauvegarder" pour enregistrer l'opération.</small>
               </div>
             </div>
@@ -176,30 +228,45 @@
               <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
                 <div class="modal-dialog modal-lg modal-dialog-centered">
                   <div class="modal-content">
-                    <div class="modal-header">
-                      <h5 class="modal-title" id="helpModalLabel">Aide - Traitement d'image</h5>
-                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <div class="modal-header bg-primary text-white">
+                      <h5 class="modal-title" id="helpModalLabel">
+                        <i class="bi bi-info-circle me-2"></i>Aide - Traitement d'image
+                      </h5>
+                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                       <p>Utilisez les contrôles pour prévisualiser les traitements en temps réel. Les opérations suivantes sont disponibles :</p>
-                      <ul>
-                        <li><strong>Grayscale</strong> : conversion en niveaux de gris.</li>
-                        <li><strong>Resize</strong> : redimensionnement (width &amp; height en px).</li>
-                        <li><strong>Rotate</strong> : rotation en degrés.</li>
-                        <li><strong>Flip</strong> : horizontal (h) ou vertical (v).</li>
-                        <li><strong>Blur / Denoise / CLAHE</strong> : réduire le bruit et améliorer le contraste local.</li>
-                        <li><strong>Canny / Otsu</strong> : détection de contours et seuillage automatique (nécessite OpenCV).</li>
-                      </ul>
-                      <p>Conseils : appliquez d'abord un léger débruitage (Median/Gaussian), puis CLAHE pour améliorer le contraste avant la détection de contours.</p>
+                      <div class="row">
+                        <div class="col-md-6">
+                          <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><i class="bi bi-easel text-info me-2"></i><strong>Grayscale</strong> : conversion en niveaux de gris.</li>
+                            <li class="list-group-item"><i class="bi bi-aspect-ratio text-info me-2"></i><strong>Resize</strong> : redimensionnement (width &amp; height en px).</li>
+                            <li class="list-group-item"><i class="bi bi-arrow-clockwise text-info me-2"></i><strong>Rotate</strong> : rotation en degrés.</li>
+                            <li class="list-group-item"><i class="bi bi-flip text-info me-2"></i><strong>Flip</strong> : horizontal (h) ou vertical (v).</li>
+                          </ul>
+                        </div>
+                        <div class="col-md-6">
+                          <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><i class="bi bi-droplet text-info me-2"></i><strong>Blur / Denoise / CLAHE</strong> : réduire le bruit et améliorer le contraste local.</li>
+                            <li class="list-group-item"><i class="bi bi-bezier text-info me-2"></i><strong>Canny / Otsu</strong> : détection de contours et seuillage automatique (nécessite OpenCV).</li>
+                          </ul>
+                        </div>
+                      </div>
+                      <p class="mt-3"><i class="bi bi-lightbulb text-warning me-2"></i>Conseils : appliquez d'abord un léger débruitage (Median/Gaussian), puis CLAHE pour améliorer le contraste avant la détection de contours.</p>
                     </div>
                     <div class="modal-footer">
-                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x me-1"></i>Fermer
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
           {% else %}
-            <div class="text-muted">Aucune image chargée. Utilisez le panneau de gauche pour en charger une.</div>
+            <div class="text-center text-muted py-5">
+              <i class="bi bi-image-slash fs-1 d-block mb-3"></i>
+              Aucune image chargée. Utilisez le panneau de gauche pour en charger une.
+            </div>
           {% endif %}
         </div>
       </div>
